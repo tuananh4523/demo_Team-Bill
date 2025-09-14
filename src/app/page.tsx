@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import {
   PieChart,
   Pie,
@@ -8,8 +8,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-} from 'recharts'
-import { useRouter } from "next/navigation";
+} from 'recharts';
 import Link from 'next/link';
 
 export default function TeamBillPage() {
@@ -51,14 +50,14 @@ export default function TeamBillPage() {
 
   // ======================= Handlers =======================
 
-  const [isOpen, setIsOpen] = useState(false);
-  const router = useRouter();
+  // const [isOpen, setIsOpen] = useState(false);
+  // const router = useRouter();
 
-   useEffect(() => {
-    if (isOpen) {
-      router.push("/expense"); // đường dẫn muốn điều hướng
-    }
-  }, [isOpen, router]);
+  //  useEffect(() => {
+  //   if (isOpen) {
+  //     router.push("/expense"); // đường dẫn muốn điều hướng
+  //   }
+  // }, [isOpen, router]);
 
   const handleAddExpense = () => {
     if (!newExpense.title || !newExpense.amount || !newExpense.category) return
@@ -195,7 +194,7 @@ export default function TeamBillPage() {
             <Link className="flex items-center gap-3 px-3 py-2 rounded bg-slate-800" href="/">Bảng điều khiển</Link>
             <Link className="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-800" href="/expenses">Quản lý chi phí</Link>
             <Link className="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-800" href="/members">Thành viên nhóm</Link>
-            <Link className="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-800" href="/">Chia hóa đơn</Link>
+            <Link className="flex items-center gap-3 px-3 py-2 rounded hover:bg-slate-800" href="/split">Chia hóa đơn</Link>
           </nav>
         </aside>
 
@@ -245,7 +244,7 @@ export default function TeamBillPage() {
                       fill="#8884d8"
                       dataKey="value"
                       label={({ name, percent }) => {
-                        return `${name} ${(percent * 100).toFixed(0)}%`;
+                        return `${name} ${(percent * 100).toFixed(1)}%`;
                       }}
                     >
                       {categories.map((entry, index) => (

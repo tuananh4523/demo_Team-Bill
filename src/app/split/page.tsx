@@ -1,228 +1,271 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import * as XLSX from "xlsx"
-import jsPDF from "jspdf"
-import "jspdf-autotable"
+import { useState, useEffect } from "react";
+import { DatePicker } from "antd";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import dayjs from "dayjs";
+import Breadcrumb from "@/components/Breadcrumb";
+import type { Group, Member } from "../teams/page";
 
-type Member = {
-  id: number
-  name: string
-  paid: number
-}
+// ================= Types =================
+type Event = {
+  id: number;
+  name: string;
+  total: number;
+  date: string;
+};
 
-type Bill = {
-  id: number
-  members: Member[]
-  total: number
-  date: string
-}
-
+// ================= Component =================
 export default function BillSplitPage() {
-  const [members, setMembers] = useState<Member[]>([])
-  const [name, setName] = useState("")
-  const [paid, setPaid] = useState("")
-  const [history, setHistory] = useState<Bill[]>([])
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
+  // Form state
+  const [eventName, setEventName] = useState("");
+  const [eventTotal, setEventTotal] = useState("");
+  const [eventDate, setEventDate] = useState<string>(
+    dayjs().format("YYYY-MM-DD")
+  );
+
+  // ================= Load data =================
   useEffect(() => {
-    const stored = localStorage.getItem("billHistory")
-    if (stored) setHistory(JSON.parse(stored))
-  }, [])
+    const storedGroups = localStorage.getItem("groups");
+    if (storedGroups) setGroups(JSON.parse(storedGroups));
 
-  const saveHistory = (newHistory: Bill[]) => {
-    setHistory(newHistory)
-    localStorage.setItem("billHistory", JSON.stringify(newHistory))
-  }
+    const storedEvents = localStorage.getItem("events");
+    if (storedEvents) setEvents(JSON.parse(storedEvents));
+  }, []);
 
-  const addMember = () => {
-    if (!name) return
-    setMembers([
-      ...members,
-      { id: Date.now(), name, paid: parseFloat(paid) || 0 },
-    ])
-    setName("")
-    setPaid("")
-  }
+  const saveEvents = (newEvents: Event[]) => {
+    setEvents(newEvents);
+    localStorage.setItem("events", JSON.stringify(newEvents));
+  };
 
-  const total = members.reduce((acc, m) => acc + m.paid, 0)
-  const equalShare = members.length > 0 ? total / members.length : 0
-
-  const settlements = members.map((m) => ({
-    name: m.name,
-    paid: m.paid,
-    balance: m.paid - equalShare,
-  }))
-
-  const saveBill = () => {
-    if (members.length === 0) return
-    const bill: Bill = {
+  // ================= Event CRUD =================
+  const addEvent = () => {
+    if (!selectedGroup || !eventName || !eventTotal) return;
+    const newEvent: Event = {
       id: Date.now(),
-      members,
-      total,
-      date: new Date().toLocaleString(),
-    }
-    saveHistory([bill, ...history])
-    setMembers([]) // reset sau khi lưu
-  }
+      name: eventName,
+      total: parseFloat(eventTotal),
+      date: eventDate,
+    };
+    saveEvents([...events, newEvent]);
+    setEventName("");
+    setEventTotal("");
+    setSelectedEvent(newEvent);
+  };
 
-  const deleteBill = (id: number) => {
-    const newHistory = history.filter((b) => b.id !== id)
-    saveHistory(newHistory)
-  }
+  const deleteEvent = (id: number) => {
+    const updated = events.filter((e) => e.id !== id);
+    saveEvents(updated);
+    if (selectedEvent?.id === id) setSelectedEvent(null);
+  };
 
+  // ================= Split Logic =================
+  const getSplitData = () => {
+    if (!selectedGroup || !selectedEvent) return [];
+    const perPerson =
+      selectedGroup.members.length > 0
+        ? selectedEvent.total / selectedGroup.members.length
+        : 0;
+    return selectedGroup.members.map((m: Member) => ({
+      name: m.name,
+      paid: 0,
+      mustPay: perPerson,
+      balance: 0 - perPerson,
+    }));
+  };
+
+  // ================= Export =================
   const exportExcel = () => {
-    const wsData: any[] = []
+    if (!selectedGroup || !selectedEvent) return;
+    const data = getSplitData();
 
-    history.forEach((bill) => {
-      wsData.push([`Hóa đơn ngày ${bill.date}`, `Tổng: ${bill.total}đ`])
-      wsData.push(["Tên", "Đã trả"])
-      bill.members.forEach((m) => {
-        wsData.push([m.name, m.paid])
-      })
-      wsData.push([]) // dòng trống
-    })
+    const wsData: (string | number)[][] = [];
+    wsData.push([`Nhóm: ${selectedGroup.name}`]);
+    wsData.push([
+      `Sự kiện: ${selectedEvent.name}`,
+      `Ngày: ${selectedEvent.date}`,
+      `Tổng: ${selectedEvent.total}đ`,
+    ]);
+    wsData.push(["Tên", "Đã trả", "Phải trả", "Cân bằng"]);
+    data.forEach((row) => {
+      wsData.push([row.name, row.paid, row.mustPay, row.balance]);
+    });
 
-    const ws = XLSX.utils.aoa_to_sheet(wsData)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Lịch sử")
-    XLSX.writeFile(wb, "lich_su_hoa_don.xlsx")
-  }
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Chia hoá đơn");
+    XLSX.writeFile(wb, "chia_hoa_don.xlsx");
+  };
 
   const exportPDF = () => {
-    const doc = new jsPDF()
-    doc.setFontSize(14)
-    doc.text("Lịch sử hóa đơn", 14, 16)
+    if (!selectedGroup || !selectedEvent) return;
+    const data = getSplitData();
+    const doc = new jsPDF();
 
-    history.forEach((bill, idx) => {
-      doc.text(
-        `Hóa đơn ${idx + 1} - ${bill.date} (Tổng: ${bill.total}đ)`,
-        14,
-        30 + idx * 70
-      )
-      const rows = bill.members.map((m) => [m.name, m.paid])
-      ;(doc as any).autoTable({
-        startY: 35 + idx * 70,
-        head: [["Tên", "Đã trả"]],
-        body: rows,
-        theme: "grid",
-      })
-    })
+    doc.setFontSize(14);
+    doc.text(`Nhóm: ${selectedGroup.name}`, 14, 16);
+    doc.text(
+      `Sự kiện: ${selectedEvent.name} (${selectedEvent.date}) - Tổng: ${selectedEvent.total}đ`,
+      14,
+      26
+    );
 
-    doc.save("lich_su_hoa_don.pdf")
-  }
+    autoTable(doc, {
+      startY: 40,
+      head: [["Tên", "Đã trả", "Phải trả", "Cân bằng"]],
+      body: data.map((r) => [r.name, r.paid, r.mustPay, r.balance]),
+      theme: "grid",
+    });
 
+    doc.save("chia_hoa_don.pdf");
+  };
+
+  // ================= Render =================
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <Card>
-        <CardHeader>
-          <CardTitle>Chia hóa đơn</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="equal">
-            <TabsList className="mb-4 flex flex-wrap">
-              <TabsTrigger value="equal">Chia đều</TabsTrigger>
-              <TabsTrigger value="paid">Theo số tiền đã trả</TabsTrigger>
-              <TabsTrigger value="history">Lịch sử</TabsTrigger>
-            </TabsList>
+    <div className="min-h-screen bg-gray-50 p-6 text-gray-800">
+      <div className="mb-4">
+        <Breadcrumb />
+      </div>
 
-            {/* Form thêm thành viên */}
-            <div className="flex gap-2 mb-4">
-              <Input
-                placeholder="Tên"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+      <div className="bg-white rounded-lg shadow p-6 max-w-6xl mx-auto">
+        <h1 className="text-2xl font-semibold mb-6">Chia Hoá Đơn</h1>
+
+        {/* Groups Section */}
+        <section className="mb-8">
+          <h2 className="font-semibold text-lg mb-3">Nhóm</h2>
+          <ul className="space-y-2">
+            {groups.map((g) => (
+              <li
+                key={g.id}
+                onClick={() => setSelectedGroup(g)}
+                className={`p-3 border rounded cursor-pointer hover:bg-slate-50 ${
+                  selectedGroup?.id === g.id ? "bg-slate-100" : ""
+                }`}
+              >
+                <span className="font-medium">
+                  {g.name} ({g.members.length} thành viên)
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Events Section */}
+        {selectedGroup && (
+          <section className="mb-8">
+            <h2 className="font-semibold text-lg mb-3">Sự kiện</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+              <input
+                className="border rounded p-2"
+                placeholder="Tên sự kiện"
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
               />
-              <Input
-                placeholder="Số tiền đã trả"
+              <input
+                className="border rounded p-2"
+                placeholder="Tổng tiền"
                 type="number"
-                value={paid}
-                onChange={(e) => setPaid(e.target.value)}
+                value={eventTotal}
+                onChange={(e) => setEventTotal(e.target.value)}
               />
-              <Button onClick={addMember}>Thêm</Button>
+              <DatePicker
+                className="w-full"
+                value={dayjs(eventDate)}
+                onChange={(d) => setEventDate(d?.format("YYYY-MM-DD") || "")}
+              />
+              <button
+                onClick={addEvent}
+                className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
+              >
+                + Thêm Event
+              </button>
             </div>
+            <ul className="space-y-2">
+              {events.map((ev) => (
+                <li
+                  key={ev.id}
+                  className={`p-3 border rounded flex justify-between items-center ${
+                    selectedEvent?.id === ev.id ? "bg-slate-100" : ""
+                  }`}
+                >
+                  <span
+                    onClick={() => setSelectedEvent(ev)}
+                    className="cursor-pointer"
+                  >
+                    {ev.name} - {ev.total}đ ({ev.date})
+                  </span>
+                  <button
+                    onClick={() => deleteEvent(ev.id)}
+                    className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+                  >
+                    Xoá
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-            {/* Chia đều */}
-            <TabsContent value="equal">
-              <p>Tổng: {total}đ</p>
-              <p>Mỗi người: {equalShare.toFixed(0)}đ</p>
-              <ul className="mt-2 list-disc pl-6">
-                {members.map((m) => (
-                  <li key={m.id}>
-                    {m.name} cần trả: {equalShare.toFixed(0)}đ
-                  </li>
-                ))}
-              </ul>
-              <Button onClick={saveBill} className="mt-4">
-                Lưu hóa đơn
-              </Button>
-            </TabsContent>
-
-            {/* Theo số tiền đã trả */}
-            <TabsContent value="paid">
-              <p>Tổng: {total}đ</p>
-              <ul className="mt-2 list-disc pl-6">
-                {settlements.map((m) => (
-                  <li key={m.name}>
-                    {m.name} ({m.paid}đ) →{" "}
-                    {m.balance >= 0
-                      ? `Nhận lại ${m.balance.toFixed(0)}đ`
-                      : `Cần trả ${(-m.balance).toFixed(0)}đ`}
-                  </li>
-                ))}
-              </ul>
-              <Button onClick={saveBill} className="mt-4">
-                Lưu hóa đơn
-              </Button>
-            </TabsContent>
-
-            {/* Lịch sử */}
-            <TabsContent value="history">
-              {history.length === 0 ? (
-                <p>Chưa có hóa đơn nào được lưu.</p>
-              ) : (
-                <div>
-                  <div className="flex gap-2 mb-4">
-                    <Button onClick={exportExcel}>Xuất Excel</Button>
-                    <Button onClick={exportPDF}>Xuất PDF</Button>
-                  </div>
-                  <ul className="space-y-4">
-                    {history.map((bill) => (
-                      <li
-                        key={bill.id}
-                        className="border rounded-lg p-3 flex justify-between"
+        {/* Split Table */}
+        {selectedGroup && selectedEvent && (
+          <section className="mb-8">
+            <h2 className="font-semibold text-lg mb-3">Bảng chia hoá đơn</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full border text-sm">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-2 border">Tên</th>
+                    <th className="p-2 border">Đã trả</th>
+                    <th className="p-2 border">Phải trả</th>
+                    <th className="p-2 border">Cân bằng</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getSplitData().map((r) => (
+                    <tr key={r.name} className="hover:bg-slate-50">
+                      <td className="p-2 border">{r.name}</td>
+                      <td className="p-2 border">{r.paid}</td>
+                      <td className="p-2 border">{r.mustPay}</td>
+                      <td
+                        className={`p-2 border ${
+                          r.balance < 0 ? "text-red-500" : "text-green-600"
+                        }`}
                       >
-                        <div>
-                          <p className="font-semibold">
-                            {bill.date} - Tổng: {bill.total}đ
-                          </p>
-                          <ul className="list-disc pl-6 text-sm">
-                            {bill.members.map((m) => (
-                              <li key={m.id}>
-                                {m.name}: {m.paid}đ
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteBill(bill.id)}
-                        >
-                          Xoá
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+                        {r.balance}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* Export Section */}
+        {selectedGroup && selectedEvent && (
+          <div className="flex gap-2">
+            <button
+              onClick={exportExcel}
+              className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
+            >
+              Xuất Excel
+            </button>
+            <button
+              onClick={exportPDF}
+              className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
+            >
+              Xuất PDF
+            </button>
+          </div>
+        )}
+      </div>
     </div>
-  )
+  );
 }

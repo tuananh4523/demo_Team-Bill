@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, ChangeEvent } from "react";
+import axios from "axios";
 import Breadcrumb from "@/components/Breadcrumb";
 
 type Expense = {
-  id: number;
+  _id: string; // MongoDB id
   title: string;
   amount: number;
   category: string;
@@ -15,14 +16,14 @@ type Expense = {
 
 type FilterStatus = "ALL" | "CHỜ" | "HOÀN TẤT";
 
+const API_URL = "http://localhost:8080/api/expenses";
+
 export default function TeamBillPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("ALL");
-
-  // State cho form thêm/sửa
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editExpense, setEditExpense] = useState<Expense | null>(null);
-  const [formData, setFormData] = useState<Omit<Expense, "id">>({
+  const [formData, setFormData] = useState<Omit<Expense, "_id">>({
     title: "",
     amount: 0,
     category: "",
@@ -30,33 +31,55 @@ export default function TeamBillPage() {
     person: "",
     date: new Date().toISOString().split("T")[0],
   });
+  const [summary, setSummary] = useState<{ totalAmount: number; count: number }>({
+    totalAmount: 0,
+    count: 0,
+  });
 
-  // ================= Load from localStorage =================
+  // ================= Load dữ liệu từ API =================
   useEffect(() => {
-    const stored = localStorage.getItem("expenses");
-    if (stored) {
-      setExpenses(JSON.parse(stored));
-    }
+    fetchExpenses();
+    fetchSummary();
   }, []);
 
-  const saveExpenses = (data: Expense[]) => {
-    setExpenses(data);
-    localStorage.setItem("expenses", JSON.stringify(data));
+  const fetchExpenses = async () => {
+    try {
+      const res = await axios.get(API_URL);
+      setExpenses(res.data);
+    } catch (err) {
+      console.error("Lỗi khi load expenses:", err);
+    }
   };
 
-  // ================= Filter =================
-  const handleFilterChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    setFilterStatus(e.target.value as FilterStatus);
+  const fetchSummary = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/summary`);
+      setSummary(res.data);
+    } catch (err) {
+      console.error("Lỗi khi load summary:", err);
+    }
   };
+
+  // ================= CRUD API =================
+  const createExpense = async (data: Omit<Expense, "_id">) =>
+    (await axios.post(API_URL, data)).data;
+
+  const updateExpenseApi = async (id: string, data: Omit<Expense, "_id">) =>
+    (await axios.put(`${API_URL}/${id}`, data)).data;
+
+  const deleteExpenseApi = async (id: string) =>
+    await axios.delete(`${API_URL}/${id}`);
+
+  // ================= Filter =================
+  const handleFilterChange = (e: ChangeEvent<HTMLSelectElement>) =>
+    setFilterStatus(e.target.value as FilterStatus);
 
   const filteredExpenses =
     filterStatus === "ALL"
       ? expenses
       : expenses.filter((e) => e.status === filterStatus);
 
-  const totalAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-
-  // ================= CRUD =================
+  // ================= Form =================
   const openAddForm = () => {
     setEditExpense(null);
     setFormData({
@@ -78,32 +101,35 @@ export default function TeamBillPage() {
       category: exp.category,
       status: exp.status,
       person: exp.person,
-      date: exp.date,
+      date: exp.date.split("T")[0],
     });
     setIsFormOpen(true);
   };
 
-  const handleSave = () => {
-    if (editExpense) {
-      // Cập nhật
-      const updated = expenses.map((e) =>
-        e.id === editExpense.id ? { ...editExpense, ...formData } : e
-      );
-      saveExpenses(updated);
-    } else {
-      // Thêm mới
-      const newExpense: Expense = {
-        id: Date.now(),
-        ...formData,
-      };
-      saveExpenses([...expenses, newExpense]);
+  const handleSave = async () => {
+    try {
+      if (editExpense) {
+        const updated = await updateExpenseApi(editExpense._id, formData);
+        setExpenses(expenses.map((e) => (e._id === editExpense._id ? updated : e)));
+      } else {
+        const newExpense = await createExpense(formData);
+        setExpenses([...expenses, newExpense]);
+      }
+      setIsFormOpen(false);
+      fetchSummary();
+    } catch (err) {
+      console.error("Lỗi khi lưu:", err);
     }
-    setIsFormOpen(false);
   };
 
-  const handleDelete = (id: number) => {
-    const updated = expenses.filter((e) => e.id !== id);
-    saveExpenses(updated);
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteExpenseApi(id);
+      setExpenses(expenses.filter((e) => e._id !== id));
+      fetchSummary();
+    } catch (err) {
+      console.error("Lỗi khi xóa:", err);
+    }
   };
 
   // ================= Render =================
@@ -136,7 +162,8 @@ export default function TeamBillPage() {
           <option value="HOÀN TẤT">HOÀN TẤT</option>
         </select>
         <span className="ml-auto font-semibold">
-          Tổng chi phí: {totalAmount.toLocaleString()} VNĐ
+          Tổng chi phí (từ API): {summary.totalAmount.toLocaleString()} VNĐ | Số giao dịch:{" "}
+          {summary.count}
         </span>
       </div>
 
@@ -156,7 +183,7 @@ export default function TeamBillPage() {
           </thead>
           <tbody className="divide-y divide-gray-200">
             {filteredExpenses.map((exp) => (
-              <tr key={exp.id} className="hover:bg-gray-50">
+              <tr key={exp._id} className="hover:bg-gray-50">
                 <td className="px-6 py-4">{exp.title}</td>
                 <td className="px-6 py-4">{exp.amount.toLocaleString()} VNĐ</td>
                 <td className="px-6 py-4">{exp.category}</td>
@@ -170,7 +197,7 @@ export default function TeamBillPage() {
                     {exp.status}
                   </span>
                 </td>
-                <td className="px-6 py-4">{exp.date}</td>
+                <td className="px-6 py-4">{exp.date.split("T")[0]}</td>
                 <td className="px-6 py-4 flex justify-center gap-2">
                   <button
                     onClick={() => openEditForm(exp)}
@@ -180,7 +207,7 @@ export default function TeamBillPage() {
                   </button>
                   <button
                     className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                    onClick={() => handleDelete(exp.id)}
+                    onClick={() => handleDelete(exp._id)}
                   >
                     Xóa
                   </button>

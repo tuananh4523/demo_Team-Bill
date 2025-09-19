@@ -1,0 +1,82 @@
+Danh sách API
+1. User
+
+Đăng ký
+POST http://localhost:8080/api/user/signup
+
+Đăng nhập
+POST http://localhost:8080/api/user/signin
+
+2. Team
+
+Tạo team
+POST http://localhost:8080/api/teams
+
+Lấy danh sách team
+GET http://localhost:8080/api/teams
+
+Lấy team theo ID
+GET http://localhost:8080/api/teams/:id
+
+Cập nhật team
+PUT http://localhost:8080/api/teams/:id
+
+Xóa team
+DELETE http://localhost:8080/api/teams/:id
+
+3. Member
+
+Thêm member
+POST http://localhost:8080/api/members
+
+Lấy danh sách member
+GET http://localhost:8080/api/members
+
+Lấy member theo ID
+GET http://localhost:8080/api/members/:id
+
+Cập nhật member
+PUT http://localhost:8080/api/members/:id
+
+Xóa member
+DELETE http://localhost:8080/api/members/:id
+
+4. Expense
+
+Thêm chi tiêu
+POST http://localhost:8080/api/expenses
+
+Cập nhật chi tiêu
+PUT http://localhost:8080/api/expenses/:id
+
+Lấy danh sách chi tiêu
+GET http://localhost:8080/api/expenses
+
+Lấy chi tiêu theo ID
+GET http://localhost:8080/api/expenses/:id
+
+Xóa chi tiêu
+DELETE http://localhost:8080/api/expenses/:id
+
+Tóm tắt chi tiêu
+GET http://localhost:8080/api/expenses/summary
+
+5. Split (Chia tiền)
+
+Tạo split
+POST http://localhost:8080/api/splits
+
+Lấy danh sách split
+GET http://localhost:8080/api/splits
+
+Lấy split theo ID
+GET http://localhost:8080/api/splits/:id
+
+Cập nhật splitzs
+PUT http://localhost:8080/api/splits/:id
+
+Xóa split
+DELETE http://localhost:8080/api/splits/:id
+
+Tóm tắt split
+GET http://localhost:8080/api/splits/summary

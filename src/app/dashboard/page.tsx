@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   PieChart,
   Pie,
@@ -9,12 +9,29 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import {
+  Card,
+  Row,
+  Col,
+  Table,
+  Tag,
+  Statistic,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Select,
+  message,
+} from "antd";
 import AuthModal, { User } from "@/app/login/AuthModal";
 import Breadcrumb from "@/components/Breadcrumb";
+import Topbar from "@/components/Topbar";
+import { getMembers, getExpenses, createExpense } from "@/lib/api";
 
 // ======================= Types =======================
 type Expense = {
-  id: number;
+  _id?: string;
+  id?: number;
   title: string;
   amount: number;
   category: string;
@@ -23,7 +40,8 @@ type Expense = {
 };
 
 type Member = {
-  id: number;
+  _id?: string;
+  id?: number;
   name: string;
 };
 
@@ -32,78 +50,53 @@ type PieLabelProps = {
   percent: number;
 };
 
-// ======================= Component =======================
+const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#22c55e"];
+
 export default function DashboardPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [members] = useState<Member[]>([]);
-
-  const [newExpense, setNewExpense] = useState<{
-    title: string;
-    amount: string;
-    category: string;
-    person: string;
-  }>({
-    title: "",
-    amount: "",
-    category: "",
-    person: members[0]?.name || "",
-  });
-
-//   const [expenses, setExpenses] = useState<Expense[]>([
-//       {
-//         id: 1,
-//         title: "Bữa trưa nhóm",
-//         amount: 120.5,
-//         category: "Ăn uống",
-//         status: "CHỜ",
-//         person: "Nguyễn Văn A",
-//       },
-//       {
-//         id: 2,
-//         title: "Văn phòng phẩm",
-//         amount: 85.3,
-//         category: "Văn phòng",
-//         status: "HOÀN TẤT",
-//         person: "Trần Thị B",
-//       },
-//       {
-//         id: 3,
-//         title: "Cà phê gặp khách hàng",
-//         amount: 45.2,
-//         category: "Kinh doanh",
-//         status: "CHỜ",
-//         person: "Lê Văn C",
-//       },
-//     ]);
-
-// const [members] = useState<Member[]>([
-//     { id: 1, name: "Nguyễn Văn A" },
-//     { id: 2, name: "Trần Thị B" },
-//     { id: 3, name: "Lê Văn C" },
-//     { id: 4, name: "Nguyễn Văn D" },
-//   ]);
-
+  const [members, setMembers] = useState<Member[]>([]);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
-  // ======================= Handlers =======================
-  const handleAddExpense = () => {
-    if (!newExpense.title || !newExpense.amount || !newExpense.category) return;
-    const newItem: Expense = {
-      id: expenses.length + 1,
-      title: newExpense.title,
-      amount: parseFloat(newExpense.amount),
-      category: newExpense.category,
-      status: "CHỜ",
-      person: newExpense.person,
+  const [form] = Form.useForm();
+
+  // ======================= Load dữ liệu =======================
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const resMembers = await getMembers();
+        setMembers(resMembers.data);
+
+        const resExpenses = await getExpenses();
+        setExpenses(resExpenses.data);
+
+        if (resMembers.data.length > 0) {
+          form.setFieldsValue({ person: resMembers.data[0].name });
+        }
+      } catch (err) {
+        message.error("❌ Lỗi khi tải dữ liệu");
+      }
     };
-    setExpenses((prev) => [...prev, newItem]);
-    setNewExpense({
-      title: "",
-      amount: "",
-      category: "",
-      person: members[0]?.name || "",
-    });
+    fetchData();
+  }, [form]);
+
+  // ======================= Handlers =======================
+  const handleAddExpense = async () => {
+    try {
+      const values = await form.validateFields();
+      const res = await createExpense({
+        ...values,
+        amount: parseFloat(values.amount),
+        status: "CHỜ",
+      });
+      setExpenses((prev) => [...prev, res.data]);
+      setIsFormOpen(false);
+      form.resetFields();
+      message.success("✅ Thêm chi tiêu thành công");
+    } catch (err) {
+      message.error("❌ Lỗi khi thêm chi tiêu");
+    }
   };
 
   // ======================= Computed =======================
@@ -119,219 +112,182 @@ export default function DashboardPage() {
     }, new Map<string, number>())
   ).map(([name, amt]) => ({ name, value: amt }));
 
-  const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#22c55e"];
-
-  // ======================= Components =======================
-  const StatCard = ({
-    title,
-    value,
-    accent,
-  }: {
-    title: string;
-    value: string;
-    accent: "red" | "amber";
-  }) => {
-    const accentClass = accent === "red" ? "text-rose-600" : "text-amber-500";
-    return (
-      <div className="bg-white rounded-lg shadow p-4 flex flex-col justify-between">
-        <div className="text-sm text-slate-500">{title}</div>
-        <div className={`mt-2 text-2xl font-semibold ${accentClass}`}>
-          {value}
-        </div>
-      </div>
-    );
-  };
-
-  const Tag = ({ label }: { label: string }) => (
-    <span className="inline-block px-2 py-1 text-xs bg-sky-100 text-sky-700 rounded">
-      {label}
-    </span>
-  );
-
-  const StatusPill = ({ status }: { status: "CHỜ" | "HOÀN TẤT" }) => {
-    const cls =
-      status === "HOÀN TẤT"
-        ? "bg-emerald-100 text-emerald-700"
-        : "bg-rose-100 text-rose-700";
-    return (
-      <span className={`inline-block px-2 py-1 text-xs rounded ${cls}`}>
-        {status}
-      </span>
-    );
-  };
-
-  const ExpenseTable = ({ data }: { data: Expense[] }) => (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h3 className="font-semibold mb-4">Chi tiêu gần đây</h3>
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="text-sm text-slate-500 border-b">
-            <th className="py-2">Mô tả</th>
-            <th className="py-2">Số tiền</th>
-            <th className="py-2">Danh mục</th>
-            <th className="py-2">Trạng thái</th>
-            <th className="py-2">Người chi trả</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((r) => (
-            <tr key={r.id} className="border-b last:border-b-0">
-              <td className="py-3">{r.title}</td>
-              <td className="py-3">{r.amount.toFixed(2)} VND</td>
-              <td className="py-3">
-                <Tag label={r.category} />
-              </td>
-              <td className="py-3">
-                <StatusPill status={r.status} />
-              </td>
-              <td className="py-3">{r.person}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  const AddExpenseForm = () => (
-    <div className="mt-6 bg-white rounded-lg shadow p-4">
-      <h3 className="font-semibold mb-4">Thêm chi tiêu mới</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <input
-          className="border p-2 rounded"
-          placeholder="Mô tả"
-          value={newExpense.title}
-          onChange={(e) =>
-            setNewExpense({ ...newExpense, title: e.target.value })
-          }
-        />
-        <input
-          className="border p-2 rounded"
-          placeholder="Số tiền"
-          type="number"
-          value={newExpense.amount}
-          onChange={(e) =>
-            setNewExpense({ ...newExpense, amount: e.target.value })
-          }
-        />
-        <input
-          className="border p-2 rounded"
-          placeholder="Danh mục"
-          value={newExpense.category}
-          onChange={(e) =>
-            setNewExpense({ ...newExpense, category: e.target.value })
-          }
-        />
-        <select
-          className="border p-2 rounded"
-          value={newExpense.person}
-          onChange={(e) =>
-            setNewExpense({ ...newExpense, person: e.target.value })
-          }
-        >
-          {members.map((m) => (
-            <option key={m.id}>{m.name}</option>
-          ))}
-        </select>
-      </div>
-      <button
-        className="mt-4 px-4 py-2 bg-slate-900 text-white rounded"
-        onClick={handleAddExpense}
-      >
-        Thêm
-      </button>
-    </div>
-  );
+  // ======================= Table =======================
+  const columns = [
+    { title: "Mô tả", dataIndex: "title" },
+    {
+      title: "Số tiền",
+      dataIndex: "amount",
+      render: (val: number) =>
+        `${val.toLocaleString("vi-VN", { style: "currency", currency: "VND" })}`,
+    },
+    {
+      title: "Danh mục",
+      dataIndex: "category",
+      render: (val: string) => <Tag color="blue">{val}</Tag>,
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      render: (val: "CHỜ" | "HOÀN TẤT") =>
+        val === "HOÀN TẤT" ? (
+          <Tag color="green">HOÀN TẤT</Tag>
+        ) : (
+          <Tag color="orange">CHỜ</Tag>
+        ),
+    },
+    { title: "Người chi trả", dataIndex: "person" },
+  ];
 
   // ======================= Render =======================
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
+      {/* Thanh topbar */}
+      <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
+
       <main className="flex-1 p-6">
         <Breadcrumb />
-        <header className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-semibold">Bảng điều khiển</h2>
-            <p className="text-sm text-slate-500">
-              Tổng quan chi tiêu và thanh toán của nhóm
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-sm text-slate-500">Xin chào,</div>
-              <div className="font-medium">
-                {user ? user.email : "Khách"}
-              </div>
-            </div>
-            <div
-              onClick={() => setIsAuthOpen(true)}
-              className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-300"
-            >
-              {user?.email ? user.email[0].toUpperCase() : "?"}
-            </div>
-          </div>
-        </header>
 
         {/* Stats */}
-        <section className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <StatCard
-            title="Tổng chi tiêu"
-            value={`${total.toFixed(2)} VND`}
-            accent="red"
-          />
-          <StatCard
-            title="Thành viên"
-            value={String(members.length)}
-            accent="amber"
-          />
-          <StatCard
-            title="Thanh toán chờ xử lý"
-            value={`${pending.toFixed(2)} VND`}
-            accent="red"
-          />
-          <StatCard
-            title="Tháng này"
-            value={`${total.toFixed(2)} VND`}
-            accent="amber"
-          />
-        </section>
+        <Row gutter={16} className="mb-6">
+          <Col xs={24} md={6}>
+            <Card>
+              <Statistic
+                title="Tổng chi tiêu"
+                value={total}
+                suffix="VND"
+                valueStyle={{ color: "#cf1322" }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} md={6}>
+            <Card>
+              <Statistic
+                title="Thành viên"
+                value={members.length}
+                valueStyle={{ color: "#faad14" }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} md={6}>
+            <Card>
+              <Statistic
+                title="Thanh toán chờ xử lý"
+                value={pending}
+                suffix="VND"
+                valueStyle={{ color: "#cf1322" }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} md={6}>
+            <Card>
+              <Statistic
+                title="Tháng này"
+                value={total}
+                suffix="VND"
+                valueStyle={{ color: "#52c41a" }}
+              />
+            </Card>
+          </Col>
+        </Row>
 
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="col-span-2">
-            <ExpenseTable data={expenses} />
-            <AddExpenseForm />
-          </div>
+        {/* Main Content */}
+        <Row gutter={16}>
+          <Col xs={24} lg={16}>
+            <Card
+              title="Chi tiêu gần đây"
+              extra={
+                <Button type="primary" onClick={() => setIsFormOpen(true)}>
+                  + Thêm chi tiêu
+                </Button>
+              }
+            >
+              <Table
+                rowKey="_id"
+                dataSource={expenses}
+                columns={columns}
+                pagination={false}
+                scroll={{ x: "max-content", y: 400 }}
+              />
+            </Card>
+          </Col>
 
-          {/* Categories + Pie Chart */}
-          <aside className="bg-white rounded-lg shadow p-4">
-            <h3 className="font-semibold mb-4">Danh mục chi tiêu</h3>
-            <div className="w-full h-64">
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={categories}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                    label={({ name, percent }: PieLabelProps) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
-                    }
-                  >
-                    {categories.map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </aside>
-        </section>
+          <Col xs={24} lg={8}>
+            <Card title="Danh mục chi tiêu">
+              <div className="w-full h-64">
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={categories}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      label={({ name, percent }: PieLabelProps) =>
+                        `${name} ${(percent * 100).toFixed(0)}%`
+                      }
+                    >
+                      {categories.map((_, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          </Col>
+        </Row>
 
+        {/* Modal thêm chi tiêu */}
+        <Modal
+          title="Thêm chi tiêu mới"
+          open={isFormOpen}
+          onCancel={() => setIsFormOpen(false)}
+          onOk={handleAddExpense}
+          okText="Lưu"
+          cancelText="Hủy"
+        >
+          <Form layout="vertical" form={form}>
+            <Form.Item
+              name="title"
+              label="Mô tả"
+              rules={[{ required: true, message: "Nhập mô tả" }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item
+              name="amount"
+              label="Số tiền"
+              rules={[{ required: true, message: "Nhập số tiền" }]}
+            >
+              <Input type="number" />
+            </Form.Item>
+            <Form.Item
+              name="category"
+              label="Danh mục"
+              rules={[{ required: true, message: "Nhập danh mục" }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item name="person" label="Người chi trả">
+              <Select>
+                {members.map((m) => (
+                  <Select.Option key={m._id || m.id} value={m.name}>
+                    {m.name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Auth Modal */}
         <AuthModal
           isOpen={isAuthOpen}
           onClose={() => setIsAuthOpen(false)}

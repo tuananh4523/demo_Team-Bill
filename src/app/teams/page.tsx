@@ -1,18 +1,30 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Breadcrumb from "@/components/Breadcrumb";
+import axios from "axios";
+import toast from "react-hot-toast";
+import {
+  Modal,
+  Button,
+  Table,
+  Space,
+  Input,
+  Select,
+  Form,
+  Avatar,
+  Tag,
+} from "antd";
+import Topbar from "@/components/Topbar";
+import AuthModal, { User } from "@/app/login/AuthModal";
 
-// ================= Types =================
 export enum MemberStatus {
-  Active = "Hoạt động",
-  Inactive = "Ngưng",
+  Active = "Active",
+  Inactive = "Inactive",
 }
 
-type StatusFilter = "Tất cả" | MemberStatus;
-
 export type Member = {
-  id: number;
+  _id: string;
+  teamId: string;
   name: string;
   role: string;
   email: string;
@@ -20,476 +32,351 @@ export type Member = {
 };
 
 export type Group = {
-  id: number;
+  _id: string;
   name: string;
   members: Member[];
 };
 
-// ================= Sample Data =================
-const initialGroups: Group[] = [
-  {
-    id: 1,
-    name: "Nhóm A",
-    members: [
-      {
-        id: 1,
-        name: "John Doe",
-        role: "Leader",
-        email: "john@example.com",
-        status: MemberStatus.Active,
-      },
-      {
-        id: 2,
-        name: "Mary Jane",
-        role: "Member",
-        email: "mary@example.com",
-        status: MemberStatus.Active,
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: "Nhóm B",
-    members: [
-      {
-        id: 3,
-        name: "Alex Nguyen",
-        role: "Member",
-        email: "alex@example.com",
-        status: MemberStatus.Inactive,
-      },
-    ],
-  },
-];
+const API_URL = "http://localhost:8080/api";
 
 export default function TeamMembersPage() {
-  const [groups, setGroups] = useState<Group[]>(() => {
-    const stored = localStorage.getItem("groups");
-    return stored ? JSON.parse(stored) : initialGroups;
-  });
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
+  // Modal group detail
+  const [openGroup, setOpenGroup] = useState<Group | null>(null);
+
+  // Modal add/edit member
+  const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+
+  const [form] = Form.useForm();
+
+  // Search & Filter trong modal
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | MemberStatus>("ALL");
+
+  // ================= API =================
+  const loadGroupsWithMembers = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_URL}/teams`);
+      setGroups(res.data);
+    } catch {
+      toast.error("Không thể tải danh sách nhóm!");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem("groups", JSON.stringify(groups));
-  }, [groups]);
+    loadGroupsWithMembers();
+  }, []);
 
-  // Modal state
-  const [isGroupModal, setIsGroupModal] = useState(false);
-  const [isMemberModal, setIsMemberModal] = useState(false);
-  const [isConfirmModal, setIsConfirmModal] = useState(false);
+  // ================= CRUD Member =================
+  const handleSaveMember = async () => {
+    if (!openGroup) return;
+    try {
+      const values = await form.validateFields();
+      let newMember: Member;
 
-  // Selection state
-  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [editGroup, setEditGroup] = useState<Group | null>(null);
-  const [editMember, setEditMember] = useState<Member | null>(null);
+      if (editingMember) {
+        const res = await axios.put(
+          `${API_URL}/members/${editingMember._id}`,
+          values
+        );
+        newMember = res.data;
 
-  // Confirm state
-  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
-  const [confirmMessage, setConfirmMessage] = useState("");
+        setOpenGroup((prev) =>
+          prev
+            ? {
+                ...prev,
+                members: prev.members.map((m) =>
+                  m._id === newMember._id ? newMember : m
+                ),
+              }
+            : prev
+        );
 
-  // Controlled form cho Member
-  const [formName, setFormName] = useState("");
-  const [formRole, setFormRole] = useState("");
-  const [formEmail, setFormEmail] = useState("");
-  const [formStatus, setFormStatus] = useState<MemberStatus>(
-    MemberStatus.Active
-  );
+        setGroups((prev) =>
+          prev.map((g) =>
+            g._id === openGroup._id
+              ? {
+                  ...g,
+                  members: g.members.map((m) =>
+                    m._id === newMember._id ? newMember : m
+                  ),
+                }
+              : g
+          )
+        );
 
-  // Controlled form cho Group
-  const [formGroupName, setFormGroupName] = useState("");
+        toast.success("✅ Cập nhật thành viên thành công!");
+      } else {
+        const res = await axios.post(
+          `${API_URL}/teams/${openGroup._id}/members`,
+          values
+        );
+        newMember = res.data;
 
-  // Search & Filter
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("Tất cả");
+        setOpenGroup((prev) =>
+          prev ? { ...prev, members: [...prev.members, newMember] } : prev
+        );
 
-  // ================= CRUD =================
-  const handleAddGroup = () => {
-    if (!formGroupName.trim()) return;
-    const newGroup: Group = {
-      id: Date.now(),
-      name: formGroupName,
-      members: [],
-    };
-    setGroups([...groups, newGroup]);
-  };
+        setGroups((prev) =>
+          prev.map((g) =>
+            g._id === openGroup._id
+              ? { ...g, members: [...g.members, newMember] }
+              : g
+          )
+        );
 
-  const handleUpdateGroup = () => {
-    if (!editGroup) return;
-    setGroups(
-      groups.map((g) =>
-        g.id === editGroup.id ? { ...g, name: formGroupName } : g
-      )
-    );
-  };
+        toast.success("✅ Thêm thành viên mới thành công!");
+      }
 
-  const handleDeleteGroup = (id: number) => {
-    setGroups(groups.filter((g) => g.id !== id));
-  };
-
-  const handleAddMember = (groupId: number) => {
-    if (!formName.trim()) return;
-    const newMember: Member = {
-      id: Date.now(),
-      name: formName,
-      role: formRole,
-      email: formEmail,
-      status: formStatus,
-    };
-    setGroups(
-      groups.map((g) =>
-        g.id === groupId ? { ...g, members: [...g.members, newMember] } : g
-      )
-    );
-  };
-
-  const handleUpdateMember = (groupId: number) => {
-    if (!editMember) return;
-    const updated: Member = {
-      ...editMember,
-      name: formName,
-      role: formRole,
-      email: formEmail,
-      status: formStatus,
-    };
-    setGroups(
-      groups.map((g) =>
-        g.id === groupId
-          ? {
-              ...g,
-              members: g.members.map((m) =>
-                m.id === updated.id ? updated : m
-              ),
-            }
-          : g
-      )
-    );
-  };
-
-  const handleDeleteMember = (groupId: number, memberId: number) => {
-    setGroups(
-      groups.map((g) =>
-        g.id === groupId
-          ? { ...g, members: g.members.filter((m) => m.id !== memberId) }
-          : g
-      )
-    );
-  };
-
-  // ================= Save =================
-  const handleSaveMember = () => {
-    if (!selectedGroup) return;
-    if (editMember) {
-      handleUpdateMember(selectedGroup.id);
-    } else {
-      handleAddMember(selectedGroup.id);
+      setIsMemberModalOpen(false);
+      form.resetFields();
+      setEditingMember(null);
+    } catch {
+      toast.error("❌ Lỗi khi lưu thành viên");
     }
-    setIsMemberModal(false);
   };
 
-  const handleSaveGroup = () => {
-    if (editGroup) {
-      handleUpdateGroup();
-    } else {
-      handleAddGroup();
+  const handleDeleteMember = async (id: string) => {
+    if (!confirm("Bạn có chắc muốn xóa thành viên này?")) return;
+    try {
+      await axios.delete(`${API_URL}/members/${id}`);
+
+      setOpenGroup((prev) =>
+        prev ? { ...prev, members: prev.members.filter((m) => m._id !== id) } : prev
+      );
+
+      setGroups((prev) =>
+        prev.map((g) =>
+          g._id === openGroup?._id
+            ? { ...g, members: g.members.filter((m) => m._id !== id) }
+            : g
+        )
+      );
+
+      toast.success("🗑️ Xóa thành viên thành công!");
+    } catch {
+      toast.error("❌ Lỗi khi xóa thành viên");
     }
-    setIsGroupModal(false);
   };
 
-  // ================= Confirm =================
-  const openConfirm = (message: string, action: () => void) => {
-    setConfirmMessage(message);
-    setConfirmAction(() => action);
-    setIsConfirmModal(true);
-  };
-
-  const handleConfirm = () => {
-    if (confirmAction) confirmAction();
-    setIsConfirmModal(false);
-  };
-
-  // ================= Filter =================
-  const filterMembers = (members: Member[]) => {
-    return members.filter((m) => {
+  // ================= Filter Members =================
+  const getFilteredMembers = () => {
+    if (!openGroup) return [];
+    return openGroup.members.filter((m) => {
       const matchesSearch =
         m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.email.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus =
-        statusFilter === "Tất cả" ? true : m.status === statusFilter;
+        statusFilter === "ALL" ? true : m.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
   };
 
+  // ================= Columns Table =================
+  const memberColumns = [
+    {
+      title: "Tên",
+      dataIndex: "name",
+      render: (_: any, record: Member) => (
+        <div className="flex items-center gap-2">
+          <Avatar src={`https://i.pravatar.cc/40?u=${record._id}`} />
+          <div>
+            <div className="font-medium">{record.name}</div>
+            <div className="text-xs text-gray-500">{record.email}</div>
+          </div>
+        </div>
+      ),
+    },
+    { title: "Vai trò", dataIndex: "role" },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      render: (val: MemberStatus) =>
+        val === MemberStatus.Active ? (
+          <Tag color="green">Hoạt động</Tag>
+        ) : (
+          <Tag color="red">Ngưng hoạt động</Tag>
+        ),
+    },
+    {
+      title: "Hành động",
+      key: "actions",
+      render: (_: any, record: Member) => (
+        <Space>
+          <Button
+            type="link"
+            onClick={() => {
+              setEditingMember(record);
+              form.setFieldsValue(record);
+              setIsMemberModalOpen(true);
+            }}
+          >
+            Sửa
+          </Button>
+          <Button type="link" danger onClick={() => handleDeleteMember(record._id)}>
+            Xóa
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
+  // ================= Render =================
   return (
-    <div className="min-h-screen bg-gray-50 p-6 text-gray-800">
-      <div className="mb-4">
-        <Breadcrumb />
-      </div>
-      <h1 className="text-2xl font-semibold mb-6">Quản lý nhóm & thành viên</h1>
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
+      {/* ✅ Header */}
+      <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
 
-      {/* Search + Filter */}
-      <div className="flex flex-col md:flex-row gap-3 mb-4">
-        <input
-          type="text"
-          placeholder="Tìm kiếm theo tên hoặc email..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="border p-2 rounded w-full md:w-1/2"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-          className="border p-2 rounded w-full md:w-1/4"
-        >
-          <option value="Tất cả">Tất cả</option>
-          <option value={MemberStatus.Active}>Hoạt động</option>
-          <option value={MemberStatus.Inactive}>Ngưng</option>
-        </select>
-      </div>
-
-      <button
-        onClick={() => {
-          setEditGroup(null);
-          setFormGroupName("");
-          setIsGroupModal(true);
-        }}
-        className="mb-4 px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
-      >
-        + Thêm nhóm
-      </button>
-
-      {/* List Groups */}
-      <div className="space-y-6">
-        {groups.map((group) => (
-          <div key={group.id} className="bg-white rounded-lg shadow p-6">
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-lg font-semibold">{group.name}</h2>
-              <div className="flex gap-2">
-                <button
-                  className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-                  onClick={() => {
-                    setEditGroup(group);
-                    setFormGroupName(group.name);
-                    setIsGroupModal(true);
-                  }}
-                >
-                  Sửa nhóm
-                </button>
-                <button
-                  className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                  onClick={() =>
-                    openConfirm(
-                      `Bạn có chắc muốn xóa nhóm "${group.name}"?`,
-                      () => handleDeleteGroup(group.id)
-                    )
-                  }
-                >
-                  Xóa nhóm
-                </button>
-              </div>
-            </div>
-
-            {/* Table Members */}
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm border">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="p-2 border">Tên</th>
-                    <th className="p-2 border">Vai trò</th>
-                    <th className="p-2 border">Email</th>
-                    <th className="p-2 border">Trạng thái</th>
-                    <th className="p-2 border text-center">Hành động</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filterMembers(group.members).map((member) => (
-                    <tr key={member.id} className="hover:bg-slate-50">
-                      <td className="p-2 border">{member.name}</td>
-                      <td className="p-2 border">{member.role}</td>
-                      <td className="p-2 border">{member.email}</td>
-                      <td className="p-2 border">
-                        <span
-                          className={`px-2 py-1 rounded text-xs text-white ${
-                            member.status === MemberStatus.Active
-                              ? "bg-green-500"
-                              : "bg-red-500"
-                          }`}
-                        >
-                          {member.status}
-                        </span>
-                      </td>
-                      <td className="p-2 border text-center">
-                        <div className="flex justify-center gap-2">
-                          <button
-                            className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs"
-                            onClick={() => {
-                              setSelectedGroup(group);
-                              setEditMember(member);
-                              setFormName(member.name);
-                              setFormRole(member.role);
-                              setFormEmail(member.email);
-                              setFormStatus(member.status);
-                              setIsMemberModal(true);
-                            }}
-                          >
-                            Sửa
-                          </button>
-                          <button
-                            className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-xs"
-                            onClick={() =>
-                              openConfirm(
-                                `Bạn có chắc muốn xóa thành viên "${member.name}"?`,
-                                () => handleDeleteMember(group.id, member.id)
-                              )
-                            }
-                          >
-                            Xóa
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+      <main className="p-6">
+        {loading ? (
+          <p className="text-center text-gray-500">Đang tải dữ liệu...</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {groups.map((group) => (
+              <div
+                key={group._id}
+                onClick={() => setOpenGroup(group)}
+                className="bg-white rounded-xl shadow p-5 hover:shadow-md transition cursor-pointer"
+              >
+                <div className="flex justify-between items-center mb-3">
+                  <h2 className="text-lg font-semibold">{group.name}</h2>
+                  <span
+                    className={`px-2 py-1 text-xs rounded-full ${
+                      group.members.some((m) => m.status === MemberStatus.Active)
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {group.members.some((m) => m.status === MemberStatus.Active)
+                      ? "Active"
+                      : "Inactive"}
+                  </span>
+                </div>
+                <div className="flex -space-x-2">
+                  {group.members.slice(0, 4).map((m) => (
+                    <Avatar key={m._id} src={`https://i.pravatar.cc/32?u=${m._id}`} />
                   ))}
-                  {filterMembers(group.members).length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="p-4 text-center text-gray-500 italic"
-                      >
-                        Không có thành viên phù hợp
-                      </td>
-                    </tr>
+                  {group.members.length > 4 && (
+                    <div className="w-8 h-8 flex items-center justify-center bg-gray-200 text-xs rounded-full border-2 border-white">
+                      +{group.members.length - 4}
+                    </div>
                   )}
-                </tbody>
-              </table>
-            </div>
-
-            <button
-              onClick={() => {
-                setSelectedGroup(group);
-                setEditMember(null);
-                setFormName("");
-                setFormRole("");
-                setFormEmail("");
-                setFormStatus(MemberStatus.Active);
-                setIsMemberModal(true);
-              }}
-              className="mt-3 px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
-            >
-              + Thêm thành viên
-            </button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        )}
+      </main>
 
-      {/* Modal thêm/sửa thành viên */}
-      {isMemberModal && selectedGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow p-6 w-96">
-            <h2 className="text-lg font-semibold mb-4">
-              {editMember ? "Sửa thành viên" : "Thêm thành viên"}
-            </h2>
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onLoginSuccess={(u) => setUser(u)}
+      />
 
-            <input
-              type="text"
-              placeholder="Tên"
-              value={formName}
-              onChange={(e) => setFormName(e.target.value)}
-              className="w-full mb-2 border p-2 rounded"
-            />
-            <input
-              type="text"
-              placeholder="Vai trò"
-              value={formRole}
-              onChange={(e) => setFormRole(e.target.value)}
-              className="w-full mb-2 border p-2 rounded"
-            />
-            <input
-              type="email"
-              placeholder="Email"
-              value={formEmail}
-              onChange={(e) => setFormEmail(e.target.value)}
-              className="w-full mb-2 border p-2 rounded"
-            />
-            <select
-              value={formStatus}
-              onChange={(e) => setFormStatus(e.target.value as MemberStatus)}
-              className="w-full mb-4 border p-2 rounded"
-            >
-              <option value={MemberStatus.Active}>Hoạt động</option>
-              <option value={MemberStatus.Inactive}>Ngưng</option>
-            </select>
+      {/* Group Detail Modal */}
+      <Modal
+        title={`Danh sách thành viên - ${openGroup?.name || ""}`}
+        open={!!openGroup}
+        onCancel={() => setOpenGroup(null)}
+        footer={null}
+        width={800}
+      >
+        {/* Search + Filter */}
+<div className="flex items-center gap-4 mb-4">
+  <Input
+    placeholder="Tìm kiếm theo tên hoặc email..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+    className="w-64"
+  />
+  <Select
+    value={statusFilter}
+    onChange={(val) => setStatusFilter(val)}
+    style={{ width: 160 }}
+  >
+    <Select.Option value="ALL">Tất cả</Select.Option>
+    <Select.Option value={MemberStatus.Active}>Hoạt động</Select.Option>
+    <Select.Option value={MemberStatus.Inactive}>Ngưng hoạt động</Select.Option>
+  </Select>
 
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsMemberModal(false)}
-                className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleSaveMember}
-                className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
-              >
-                Lưu
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+  {/* ✅ Chỉ Leader mới thấy nút thêm */}
+  {user?.role === "Leader" && (
+    <Button
+      type="primary"
+      className="ml-auto"
+      onClick={() => {
+        form.resetFields();
+        setEditingMember(null);
+        setIsMemberModalOpen(true);
+      }}
+    >
+      + Add Member
+    </Button>
+  )}
+</div>
 
-      {/* Modal thêm/sửa nhóm */}
-      {isGroupModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow p-6 w-80">
-            <h2 className="text-lg font-semibold mb-4">
-              {editGroup ? "Sửa nhóm" : "Thêm nhóm"}
-            </h2>
-            <input
-              type="text"
-              placeholder="Tên nhóm"
-              value={formGroupName}
-              onChange={(e) => setFormGroupName(e.target.value)}
-              className="w-full mb-4 border p-2 rounded"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsGroupModal(false)}
-                className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleSaveGroup}
-                className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
-              >
-                Lưu
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <Table
+          rowKey="_id"
+          dataSource={getFilteredMembers()}
+          columns={memberColumns}
+          pagination={false}
+        />
+      </Modal>
 
-      {/* Modal xác nhận */}
-      {isConfirmModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow p-6 w-96">
-            <h2 className="text-lg font-semibold mb-4">Xác nhận</h2>
-            <p className="mb-6">{confirmMessage}</p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setIsConfirmModal(false)}
-                className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleConfirm}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                Đồng ý
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Add/Edit Member Modal */}
+      <Modal
+        title={editingMember ? "Edit Member" : "Add Member"}
+        open={isMemberModalOpen}
+        onCancel={() => setIsMemberModalOpen(false)}
+        onOk={handleSaveMember}
+        okText="Save"
+        cancelText="Cancel"
+      >
+        <Form layout="vertical" form={form}>
+          <Form.Item
+            name="name"
+            label="Tên"
+            rules={[{ required: true, message: "Nhập tên" }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+              { required: true, type: "email", message: "Email không hợp lệ" },
+            ]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item name="role" label="Vai trò">
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="status"
+            label="Trạng thái"
+            initialValue={MemberStatus.Active}
+          >
+            <Select>
+              <Select.Option value={MemberStatus.Active}>Hoạt động</Select.Option>
+              <Select.Option value={MemberStatus.Inactive}>
+                Ngưng hoạt động
+              </Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

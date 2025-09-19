@@ -1,11 +1,26 @@
 "use client";
 
-import { useState, useEffect, ChangeEvent } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
+import {
+  Button,
+  Card,
+  Input,
+  Select,
+  Table,
+  Tag,
+  Space,
+  Modal,
+  Form,
+  message,
+} from "antd";
+import dayjs from "dayjs";
 import Breadcrumb from "@/components/Breadcrumb";
+import Topbar from "@/components/Topbar"; // ✅ thêm Topbar
+import AuthModal, { User } from "@/app/login/AuthModal"; // ✅ để login giống dashboard
 
 type Expense = {
-  _id: string; // MongoDB id
+  _id: string;
   title: string;
   amount: number;
   category: string;
@@ -21,33 +36,31 @@ const API_URL = "http://localhost:8080/api/expenses";
 export default function TeamBillPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("ALL");
+  const [summary, setSummary] = useState({ totalAmount: 0, count: 0 });
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editExpense, setEditExpense] = useState<Expense | null>(null);
-  const [formData, setFormData] = useState<Omit<Expense, "_id">>({
-    title: "",
-    amount: 0,
-    category: "",
-    status: "CHỜ",
-    person: "",
-    date: new Date().toISOString().split("T")[0],
-  });
-  const [summary, setSummary] = useState<{ totalAmount: number; count: number }>({
-    totalAmount: 0,
-    count: 0,
-  });
 
-  // ================= Load dữ liệu từ API =================
+  const [isAuthOpen, setIsAuthOpen] = useState(false); // ✅ login modal
+  const [user, setUser] = useState<User | null>(null); // ✅ user info
+
+  const [form] = Form.useForm();
+
+  // ================= Load dữ liệu =================
   useEffect(() => {
-    fetchExpenses();
-    fetchSummary();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    await Promise.all([fetchExpenses(), fetchSummary()]);
+  };
 
   const fetchExpenses = async () => {
     try {
       const res = await axios.get(API_URL);
       setExpenses(res.data);
-    } catch (err) {
-      console.error("Lỗi khi load expenses:", err);
+    } catch {
+      message.error("❌ Lỗi khi load expenses");
     }
   };
 
@@ -55,257 +68,209 @@ export default function TeamBillPage() {
     try {
       const res = await axios.get(`${API_URL}/summary`);
       setSummary(res.data);
-    } catch (err) {
-      console.error("Lỗi khi load summary:", err);
+    } catch {
+      message.error("❌ Lỗi khi load summary");
     }
   };
 
-  // ================= CRUD API =================
-  const createExpense = async (data: Omit<Expense, "_id">) =>
-    (await axios.post(API_URL, data)).data;
-
-  const updateExpenseApi = async (id: string, data: Omit<Expense, "_id">) =>
-    (await axios.put(`${API_URL}/${id}`, data)).data;
-
-  const deleteExpenseApi = async (id: string) =>
-    await axios.delete(`${API_URL}/${id}`);
-
-  // ================= Filter =================
-  const handleFilterChange = (e: ChangeEvent<HTMLSelectElement>) =>
-    setFilterStatus(e.target.value as FilterStatus);
-
-  const filteredExpenses =
-    filterStatus === "ALL"
-      ? expenses
-      : expenses.filter((e) => e.status === filterStatus);
-
-  // ================= Form =================
-  const openAddForm = () => {
-    setEditExpense(null);
-    setFormData({
-      title: "",
-      amount: 0,
-      category: "",
-      status: "CHỜ",
-      person: "",
-      date: new Date().toISOString().split("T")[0],
-    });
-    setIsFormOpen(true);
-  };
-
-  const openEditForm = (exp: Expense) => {
-    setEditExpense(exp);
-    setFormData({
-      title: exp.title,
-      amount: exp.amount,
-      category: exp.category,
-      status: exp.status,
-      person: exp.person,
-      date: exp.date.split("T")[0],
-    });
-    setIsFormOpen(true);
-  };
-
+  // ================= CRUD =================
   const handleSave = async () => {
     try {
+      const values = await form.validateFields();
+      const payload = { ...values, amount: Number(values.amount) };
+
       if (editExpense) {
-        const updated = await updateExpenseApi(editExpense._id, formData);
-        setExpenses(expenses.map((e) => (e._id === editExpense._id ? updated : e)));
+        const res = await axios.put(`${API_URL}/${editExpense._id}`, payload);
+        setExpenses((prev) =>
+          prev.map((e) => (e._id === editExpense._id ? res.data : e))
+        );
+        message.success("✅ Cập nhật chi tiêu thành công");
       } else {
-        const newExpense = await createExpense(formData);
-        setExpenses([...expenses, newExpense]);
+        const res = await axios.post(API_URL, payload);
+        setExpenses((prev) => [...prev, res.data]);
+        message.success("✅ Thêm chi tiêu thành công");
       }
+
       setIsFormOpen(false);
+      form.resetFields();
       fetchSummary();
-    } catch (err) {
-      console.error("Lỗi khi lưu:", err);
+    } catch {
+      message.error("❌ Lỗi khi lưu");
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteExpenseApi(id);
-      setExpenses(expenses.filter((e) => e._id !== id));
+      await axios.delete(`${API_URL}/${id}`);
+      setExpenses((prev) => prev.filter((e) => e._id !== id));
+      message.success("🗑️ Xóa thành công");
       fetchSummary();
-    } catch (err) {
-      console.error("Lỗi khi xóa:", err);
+    } catch {
+      message.error("❌ Lỗi khi xóa");
     }
   };
 
+  // ================= Filter =================
+  const filteredExpenses =
+    filterStatus === "ALL"
+      ? expenses
+      : expenses.filter((e) => e.status === filterStatus);
+
+  // ================= Table Columns =================
+  const columns = [
+    { title: "Tiêu đề", dataIndex: "title" },
+    {
+      title: "Số tiền",
+      dataIndex: "amount",
+      render: (val: number | string) =>
+        `${Number(val).toLocaleString("vi-VN")} VNĐ`,
+    },
+    { title: "Loại", dataIndex: "category" },
+    { title: "Người chịu", dataIndex: "person" },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      render: (val: "CHỜ" | "HOÀN TẤT") =>
+        val === "CHỜ" ? (
+          <Tag color="orange">CHỜ</Tag>
+        ) : (
+          <Tag color="green">HOÀN TẤT</Tag>
+        ),
+    },
+    {
+      title: "Ngày",
+      dataIndex: "date",
+      render: (val: string) => dayjs(val).format("YYYY-MM-DD"),
+    },
+    {
+      title: "Hành động",
+      render: (_: any, record: Expense) => (
+        <Space>
+          <Button
+            type="link"
+            onClick={() => {
+              setEditExpense(record);
+              setIsFormOpen(true);
+              form.setFieldsValue({
+                ...record,
+                date: dayjs(record.date).format("YYYY-MM-DD"),
+              });
+            }}
+          >
+            Sửa
+          </Button>
+          <Button type="link" danger onClick={() => handleDelete(record._id)}>
+            Xóa
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
   // ================= Render =================
   return (
-    <div className="p-6 bg-gray-50 min-h-screen text-slate-800">
-      <div className="mb-4">
-        <Breadcrumb />
-      </div>
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
+      {/* ✅ Header cố định giống Dashboard */}
+      <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Quản lý chi tiêu</h1>
-        <button
-          onClick={openAddForm}
-          className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
-        >
-          + Thêm chi tiêu
-        </button>
-      </div>
-
-      {/* Filter */}
-      <div className="flex items-center mb-6 gap-4">
-        <select
-          className="border p-2 rounded"
-          value={filterStatus}
-          onChange={handleFilterChange}
-        >
-          <option value="ALL">Tất cả</option>
-          <option value="CHỜ">CHỜ</option>
-          <option value="HOÀN TẤT">HOÀN TẤT</option>
-        </select>
-        <span className="ml-auto font-semibold">
-          Tổng chi phí (từ API): {summary.totalAmount.toLocaleString()} VNĐ | Số giao dịch:{" "}
-          {summary.count}
-        </span>
-      </div>
-
-      {/* Table */}
-      <div className="overflow-x-auto bg-white rounded-lg shadow p-6">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="px-6 py-3 text-left text-sm font-medium">Tiêu đề</th>
-              <th className="px-6 py-3 text-left text-sm font-medium">Số tiền</th>
-              <th className="px-6 py-3 text-left text-sm font-medium">Loại</th>
-              <th className="px-6 py-3 text-left text-sm font-medium">Người chịu</th>
-              <th className="px-6 py-3 text-left text-sm font-medium">Trạng thái</th>
-              <th className="px-6 py-3 text-left text-sm font-medium">Ngày</th>
-              <th className="px-6 py-3 text-center text-sm font-medium">Hành động</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredExpenses.map((exp) => (
-              <tr key={exp._id} className="hover:bg-gray-50">
-                <td className="px-6 py-4">{exp.title}</td>
-                <td className="px-6 py-4">{exp.amount.toLocaleString()} VNĐ</td>
-                <td className="px-6 py-4">{exp.category}</td>
-                <td className="px-6 py-4">{exp.person}</td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`px-2 py-1 rounded text-white text-sm ${
-                      exp.status === "CHỜ" ? "bg-amber-500" : "bg-emerald-600"
-                    }`}
-                  >
-                    {exp.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4">{exp.date.split("T")[0]}</td>
-                <td className="px-6 py-4 flex justify-center gap-2">
-                  <button
-                    onClick={() => openEditForm(exp)}
-                    className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-                  >
-                    Sửa
-                  </button>
-                  <button
-                    className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                    onClick={() => handleDelete(exp._id)}
-                  >
-                    Xóa
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {filteredExpenses.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-6 py-4 text-center text-gray-500 italic">
-                  Không có dữ liệu
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Modal thêm/sửa */}
-      {isFormOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow p-6 w-96">
-            <h2 className="text-lg font-semibold mb-4">
-              {editExpense ? "Sửa chi tiêu" : "Thêm chi tiêu"}
-            </h2>
-            <div className="space-y-2">
-              <input
-                className="border p-2 rounded w-full"
-                placeholder="Tiêu đề"
-                value={formData.title}
-                onChange={(e) =>
-                  setFormData({ ...formData, title: e.target.value })
-                }
-              />
-              <input
-                type="number"
-                min={0}
-                className="border p-2 rounded w-full"
-                placeholder="Số tiền"
-                value={formData.amount}
-                onChange={(e) =>
-                  setFormData({ ...formData, amount: Number(e.target.value) })
-                }
-              />
-              <input
-                className="border p-2 rounded w-full"
-                placeholder="Loại"
-                value={formData.category}
-                onChange={(e) =>
-                  setFormData({ ...formData, category: e.target.value })
-                }
-              />
-              <input
-                className="border p-2 rounded w-full"
-                placeholder="Người chịu"
-                value={formData.person}
-                onChange={(e) =>
-                  setFormData({ ...formData, person: e.target.value })
-                }
-              />
-              <select
-                className="border p-2 rounded w-full"
-                value={formData.status}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    status: e.target.value as "CHỜ" | "HOÀN TẤT",
-                  })
-                }
-              >
-                <option value="CHỜ">CHỜ</option>
-                <option value="HOÀN TẤT">HOÀN TẤT</option>
-              </select>
-              <input
-                type="date"
-                className="border p-2 rounded w-full"
-                value={formData.date}
-                onChange={(e) =>
-                  setFormData({ ...formData, date: e.target.value })
-                }
-              />
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
-                onClick={() => setIsFormOpen(false)}
-              >
-                Hủy
-              </button>
-              <button
-                className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
-                onClick={handleSave}
-              >
-                Lưu
-              </button>
-            </div>
-          </div>
+      <main className="p-6">
+        {/* Header page */}
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-semibold">Quản lý chi tiêu</h1>
+          <Button
+            type="primary"
+            onClick={() => {
+              setEditExpense(null);
+              setIsFormOpen(true);
+              form.resetFields();
+              form.setFieldsValue({
+                status: "CHỜ",
+                date: dayjs().format("YYYY-MM-DD"),
+              });
+            }}
+          >
+            + Thêm chi tiêu
+          </Button>
         </div>
-      )}
+
+        {/* Filter */}
+        <div className="flex items-center mb-6 gap-4">
+          <Select
+            value={filterStatus}
+            onChange={(val) => setFilterStatus(val)}
+            style={{ width: 160 }}
+          >
+            <Select.Option value="ALL">Tất cả</Select.Option>
+            <Select.Option value="CHỜ">CHỜ</Select.Option>
+            <Select.Option value="HOÀN TẤT">HOÀN TẤT</Select.Option>
+          </Select>
+          <span className="ml-auto font-semibold">
+            Tổng:{" "}
+            {new Intl.NumberFormat("vi-VN").format(summary.totalAmount)} VNĐ |{" "}
+            {summary.count} giao dịch
+          </span>
+        </div>
+
+        {/* Table */}
+        <Card>
+          <Table
+            rowKey="_id"
+            dataSource={filteredExpenses}
+            columns={columns}
+            pagination={false}
+            scroll={{ x: "100%", y: 500 }}
+          />
+        </Card>
+
+        {/* Modal thêm/sửa */}
+        <Modal
+          title={editExpense ? "Sửa chi tiêu" : "Thêm chi tiêu"}
+          open={isFormOpen}
+          onCancel={() => setIsFormOpen(false)}
+          onOk={handleSave}
+          okText="Lưu"
+          cancelText="Hủy"
+        >
+          <Form layout="vertical" form={form}>
+            <Form.Item
+              name="title"
+              label="Tiêu đề"
+              rules={[{ required: true, message: "Nhập tiêu đề" }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item
+              name="amount"
+              label="Số tiền"
+              rules={[{ required: true, message: "Nhập số tiền" }]}
+            >
+              <Input type="number" placeholder="Nhập số tiền (VD: 500000)" />
+            </Form.Item>
+            <Form.Item name="category" label="Loại">
+              <Input />
+            </Form.Item>
+            <Form.Item name="person" label="Người chịu">
+              <Input />
+            </Form.Item>
+            <Form.Item name="status" label="Trạng thái">
+              <Select>
+                <Select.Option value="CHỜ">CHỜ</Select.Option>
+                <Select.Option value="HOÀN TẤT">HOÀN TẤT</Select.Option>
+              </Select>
+            </Form.Item>
+            <Form.Item name="date" label="Ngày">
+              <Input type="date" />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Auth Modal */}
+        <AuthModal
+          isOpen={isAuthOpen}
+          onClose={() => setIsAuthOpen(false)}
+          onLoginSuccess={(u) => setUser(u)}
+        />
+      </main>
     </div>
   );
 }

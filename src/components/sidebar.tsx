@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Home, CreditCard, Users, Split, Wallet, Settings, BarChart } from "lucide-react"
+import { Home, CreditCard, Users, UserPlus , Split, Wallet, Settings, BarChart } from "lucide-react"
 import { usePathname } from "next/navigation"
 import clsx from "clsx"
 
@@ -16,6 +16,7 @@ type MenuItem = {
 const mainFeatures: MenuItem[] = [
   { name: "Bảng điều khiển", href: "/", icon: Home },
   { name: "Quản lý chi tiêu", href: "/expenses", icon: CreditCard },
+  { name: "Bạn bè", href: "/friends", icon: UserPlus },
   { name: "Chia hoá đơn", href: "/split", icon: Split },
   { name: "Nhóm", href: "/teams", icon: Users },
 ]
@@ -50,9 +51,9 @@ function Section({ title, items }: { title: string; items: MenuItem[] }) {
               key={item.name}
               href={item.href}
               className={clsx(
-                "flex items-center gap-3 px-4 py-2 text-sm rounded-md transition-colors",
+                "flex items-center gap-3 px-4 py-2 text-sm rounded-md transition-all duration-200",
                 active
-                  ? "bg-gray-100 text-gray-900 font-medium"
+                  ? "bg-blue-50 text-blue-600 font-medium border-l-4 border-blue-500"
                   : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               )}
             >
@@ -69,7 +70,15 @@ function Section({ title, items }: { title: string; items: MenuItem[] }) {
 // Sidebar chính
 export default function Sidebar() {
   return (
-    <aside className="w-64 h-screen border-r bg-white flex flex-col">
+    <aside className="w-64 h-screen border-r bg-white flex flex-col shadow-sm">
+      {/* Logo */}
+      <div className="h-16 flex items-center border-b px-6">
+        <Link href="/" className="text-xl font-bold tracking-wide">
+          Team <span className="text-blue-600">Bill</span>
+        </Link>
+      </div>
+
+      {/* Menu */}
       <div className="flex-1 overflow-y-auto py-6">
         <Section title="Tính năng chính" items={mainFeatures} />
         <Section title="Công cụ tài chính" items={financialTools} />

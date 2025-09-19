@@ -1,69 +1,101 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { DatePicker } from "antd";
+import { DatePicker, Input, Button, Card, List, Table, Tag, Space, message, Popconfirm } from "antd";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import dayjs from "dayjs";
+import axios from "axios";
 import Breadcrumb from "@/components/Breadcrumb";
-import type { Group, Member } from "../teams/page";
 
 // ================= Types =================
-type Event = {
-  id: number;
+export type Member = {
+  _id: string;
   name: string;
+  role: string;
+  email: string;
+  status: string;
+};
+
+export type Group = {
+  _id: string;
+  name: string;
+  members: Member[];
+};
+
+type Event = {
+  _id: string;
+  members: { name: string; paid: number }[];
   total: number;
   date: string;
 };
+
+// ================= Config =================
+const API_BASE = "http://localhost:8080/api";
 
 // ================= Component =================
 export default function BillSplitPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
   // Form state
-  const [eventName, setEventName] = useState("");
   const [eventTotal, setEventTotal] = useState("");
-  const [eventDate, setEventDate] = useState<string>(
-    dayjs().format("YYYY-MM-DD")
-  );
+  const [eventDate, setEventDate] = useState(dayjs().format("YYYY-MM-DD"));
 
-  // ================= Load data =================
+  // ================= Load Groups =================
   useEffect(() => {
-    const storedGroups = localStorage.getItem("groups");
-    if (storedGroups) setGroups(JSON.parse(storedGroups));
-
-    const storedEvents = localStorage.getItem("events");
-    if (storedEvents) setEvents(JSON.parse(storedEvents));
+    axios
+      .get(`${API_BASE}/teams`)
+      .then((res) => setGroups(res.data))
+      .catch(() => message.error("❌ Lỗi load teams"));
   }, []);
 
-  const saveEvents = (newEvents: Event[]) => {
-    setEvents(newEvents);
-    localStorage.setItem("events", JSON.stringify(newEvents));
+  // ================= Load Events theo Group =================
+  const loadEventsByGroup = async (groupId: string) => {
+    try {
+      const res = await axios.get(`${API_BASE}/teams/${groupId}/splits`);
+      setEvents(res.data);
+    } catch {
+      message.error("❌ Lỗi load events theo group");
+    }
   };
 
   // ================= Event CRUD =================
-  const addEvent = () => {
-    if (!selectedGroup || !eventName || !eventTotal) return;
-    const newEvent: Event = {
-      id: Date.now(),
-      name: eventName,
-      total: parseFloat(eventTotal),
-      date: eventDate,
-    };
-    saveEvents([...events, newEvent]);
-    setEventName("");
-    setEventTotal("");
-    setSelectedEvent(newEvent);
+  const addEvent = async () => {
+    if (!selectedGroup || !eventTotal) return;
+    try {
+      const res = await axios.post(`${API_BASE}/splits`, {
+        teamId: selectedGroup._id,
+        members: selectedGroup.members.map((m) => ({
+          name: m.name,
+          paid: 0,
+        })),
+        total: parseFloat(eventTotal),
+        date: eventDate,
+      });
+      const newEvent = res.data;
+      setEvents((prev) => [...prev, newEvent]);
+      setSelectedEvent(newEvent);
+      setEventTotal("");
+      message.success("✅ Thêm sự kiện thành công");
+    } catch (err) {
+      message.error("❌ Lỗi thêm event");
+    }
   };
 
-  const deleteEvent = (id: number) => {
-    const updated = events.filter((e) => e.id !== id);
-    saveEvents(updated);
-    if (selectedEvent?.id === id) setSelectedEvent(null);
+  const deleteEvent = async (id: string) => {
+    try {
+      await axios.delete(`${API_BASE}/splits/${id}`);
+      setEvents((prev) => prev.filter((e) => e._id !== id));
+      if (selectedEvent?._id === id) setSelectedEvent(null);
+      message.success("🗑️ Xoá sự kiện thành công");
+    } catch (err) {
+      message.error("❌ Lỗi xoá event");
+    }
   };
 
   // ================= Split Logic =================
@@ -71,9 +103,9 @@ export default function BillSplitPage() {
     if (!selectedGroup || !selectedEvent) return [];
     const perPerson =
       selectedGroup.members.length > 0
-        ? selectedEvent.total / selectedGroup.members.length
+        ? (selectedEvent.total ?? 0) / selectedGroup.members.length
         : 0;
-    return selectedGroup.members.map((m: Member) => ({
+    return selectedGroup.members.map((m) => ({
       name: m.name,
       paid: 0,
       mustPay: perPerson,
@@ -89,18 +121,23 @@ export default function BillSplitPage() {
     const wsData: (string | number)[][] = [];
     wsData.push([`Nhóm: ${selectedGroup.name}`]);
     wsData.push([
-      `Sự kiện: ${selectedEvent.name}`,
-      `Ngày: ${selectedEvent.date}`,
-      `Tổng: ${selectedEvent.total}đ`,
+      `Sự kiện ID: ${selectedEvent._id}`,
+      `Ngày: ${dayjs(selectedEvent.date).format("YYYY-MM-DD")}`,
+      `Tổng: ${(selectedEvent.total ?? 0).toLocaleString()} VNĐ`,
     ]);
     wsData.push(["Tên", "Đã trả", "Phải trả", "Cân bằng"]);
     data.forEach((row) => {
-      wsData.push([row.name, row.paid, row.mustPay, row.balance]);
+      wsData.push([
+        row.name,
+        row.paid,
+        (row.mustPay ?? 0).toLocaleString(),
+        (row.balance ?? 0).toLocaleString(),
+      ]);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Chia hoá đơn");
+    XLSX.utils.book_append_sheet(wb, ws, "Chia hóa đơn");
     XLSX.writeFile(wb, "chia_hoa_don.xlsx");
   };
 
@@ -112,7 +149,9 @@ export default function BillSplitPage() {
     doc.setFontSize(14);
     doc.text(`Nhóm: ${selectedGroup.name}`, 14, 16);
     doc.text(
-      `Sự kiện: ${selectedEvent.name} (${selectedEvent.date}) - Tổng: ${selectedEvent.total}đ`,
+      `Sự kiện: ${selectedEvent._id} (${dayjs(selectedEvent.date).format(
+        "YYYY-MM-DD"
+      )}) - Tổng: ${(selectedEvent.total ?? 0).toLocaleString()} VNĐ`,
       14,
       26
     );
@@ -120,7 +159,12 @@ export default function BillSplitPage() {
     autoTable(doc, {
       startY: 40,
       head: [["Tên", "Đã trả", "Phải trả", "Cân bằng"]],
-      body: data.map((r) => [r.name, r.paid, r.mustPay, r.balance]),
+      body: data.map((r) => [
+        r.name,
+        r.paid,
+        (r.mustPay ?? 0).toLocaleString(),
+        (r.balance ?? 0).toLocaleString(),
+      ]),
       theme: "grid",
     });
 
@@ -129,143 +173,122 @@ export default function BillSplitPage() {
 
   // ================= Render =================
   return (
-    <div className="min-h-screen bg-gray-50 p-6 text-gray-800">
+    <div className="min-h-screen bg-gray-50 p-6">
       <div className="mb-4">
         <Breadcrumb />
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6 max-w-6xl mx-auto">
-        <h1 className="text-2xl font-semibold mb-6">Chia Hoá Đơn</h1>
-
+      <Card title="Chia Hoá Đơn" className="max-w-6xl mx-auto">
         {/* Groups Section */}
-        <section className="mb-8">
-          <h2 className="font-semibold text-lg mb-3">Nhóm</h2>
-          <ul className="space-y-2">
-            {groups.map((g) => (
-              <li
-                key={g.id}
-                onClick={() => setSelectedGroup(g)}
-                className={`p-3 border rounded cursor-pointer hover:bg-slate-50 ${
-                  selectedGroup?.id === g.id ? "bg-slate-100" : ""
+        <Card title="Nhóm" size="small" className="mb-6">
+          <List
+            bordered
+            dataSource={groups}
+            renderItem={(g) => (
+              <List.Item
+                onClick={() => {
+                  setSelectedGroup(g);
+                  setSelectedEvent(null);
+                  loadEventsByGroup(g._id); // 👉 gọi API khi chọn nhóm
+                }}
+                className={`cursor-pointer ${
+                  selectedGroup?._id === g._id ? "bg-slate-100" : ""
                 }`}
               >
                 <span className="font-medium">
-                  {g.name} ({g.members.length} thành viên)
+                  {g.name} ({g.members?.length || 0} thành viên)
                 </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+              </List.Item>
+            )}
+          />
+        </Card>
 
         {/* Events Section */}
         {selectedGroup && (
-          <section className="mb-8">
-            <h2 className="font-semibold text-lg mb-3">Sự kiện</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-              <input
-                className="border rounded p-2"
-                placeholder="Tên sự kiện"
-                value={eventName}
-                onChange={(e) => setEventName(e.target.value)}
-              />
-              <input
-                className="border rounded p-2"
+          <Card title="Sự kiện" size="small" className="mb-6">
+            <Space style={{ marginBottom: 16 }}>
+              <Input
                 placeholder="Tổng tiền"
                 type="number"
                 value={eventTotal}
                 onChange={(e) => setEventTotal(e.target.value)}
               />
               <DatePicker
-                className="w-full"
                 value={dayjs(eventDate)}
                 onChange={(d) => setEventDate(d?.format("YYYY-MM-DD") || "")}
               />
-              <button
-                onClick={addEvent}
-                className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
-              >
+              <Button type="primary" onClick={addEvent}>
                 + Thêm Event
-              </button>
-            </div>
-            <ul className="space-y-2">
-              {events.map((ev) => (
-                <li
-                  key={ev.id}
-                  className={`p-3 border rounded flex justify-between items-center ${
-                    selectedEvent?.id === ev.id ? "bg-slate-100" : ""
-                  }`}
+              </Button>
+            </Space>
+
+            <List
+              bordered
+              dataSource={events}
+              renderItem={(ev) => (
+                <List.Item
+                  actions={[
+                    <Popconfirm
+                      title="Bạn có chắc muốn xoá sự kiện này?"
+                      onConfirm={() => deleteEvent(ev._id)}
+                      okText="Xoá"
+                      cancelText="Huỷ"
+                      key="delete"
+                    >
+                      <Button danger size="small">
+                        Xoá
+                      </Button>
+                    </Popconfirm>,
+                  ]}
                 >
                   <span
-                    onClick={() => setSelectedEvent(ev)}
                     className="cursor-pointer"
+                    onClick={() => setSelectedEvent(ev)}
                   >
-                    {ev.name} - {ev.total}đ ({ev.date})
+                    {ev._id} - {(ev.total ?? 0).toLocaleString()} VNĐ (
+                    {dayjs(ev.date).format("YYYY-MM-DD")})
                   </span>
-                  <button
-                    onClick={() => deleteEvent(ev.id)}
-                    className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
-                  >
-                    Xoá
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
+                </List.Item>
+              )}
+            />
+          </Card>
         )}
 
         {/* Split Table */}
         {selectedGroup && selectedEvent && (
-          <section className="mb-8">
-            <h2 className="font-semibold text-lg mb-3">Bảng chia hoá đơn</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full border text-sm">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="p-2 border">Tên</th>
-                    <th className="p-2 border">Đã trả</th>
-                    <th className="p-2 border">Phải trả</th>
-                    <th className="p-2 border">Cân bằng</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {getSplitData().map((r) => (
-                    <tr key={r.name} className="hover:bg-slate-50">
-                      <td className="p-2 border">{r.name}</td>
-                      <td className="p-2 border">{r.paid}</td>
-                      <td className="p-2 border">{r.mustPay}</td>
-                      <td
-                        className={`p-2 border ${
-                          r.balance < 0 ? "text-red-500" : "text-green-600"
-                        }`}
-                      >
-                        {r.balance}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <Card title="Bảng chia hoá đơn" size="small" className="mb-6">
+            <Table
+              size="small"
+              rowKey="name"
+              dataSource={getSplitData()}
+              pagination={false}
+              columns={[
+                { title: "Tên", dataIndex: "name" },
+                { title: "Đã trả", dataIndex: "paid" },
+                { title: "Phải trả", dataIndex: "mustPay" },
+                {
+                  title: "Cân bằng",
+                  dataIndex: "balance",
+                  render: (val: number) =>
+                    val < 0 ? (
+                      <Tag color="red">{val.toLocaleString()}</Tag>
+                    ) : (
+                      <Tag color="green">{val.toLocaleString()}</Tag>
+                    ),
+                },
+              ]}
+            />
+          </Card>
         )}
 
-        {/* Export Section */}
+        {/* Export */}
         {selectedGroup && selectedEvent && (
-          <div className="flex gap-2">
-            <button
-              onClick={exportExcel}
-              className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
-            >
-              Xuất Excel
-            </button>
-            <button
-              onClick={exportPDF}
-              className="px-4 py-2 bg-slate-900 text-white rounded hover:bg-slate-700"
-            >
-              Xuất PDF
-            </button>
-          </div>
+          <Space>
+            <Button onClick={exportExcel}>Xuất Excel</Button>
+            <Button onClick={exportPDF}>Xuất PDF</Button>
+          </Space>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

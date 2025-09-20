@@ -16,8 +16,8 @@ import {
 } from "antd";
 import dayjs from "dayjs";
 import Breadcrumb from "@/components/Breadcrumb";
-import Topbar from "@/components/Topbar"; // ✅ thêm Topbar
-import AuthModal, { User } from "@/app/login/AuthModal"; // ✅ để login giống dashboard
+import Topbar from "@/components/Topbar";
+import AuthModal, { User } from "@/app/login/AuthModal";
 
 type Expense = {
   _id: string;
@@ -41,8 +41,8 @@ export default function TeamBillPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editExpense, setEditExpense] = useState<Expense | null>(null);
 
-  const [isAuthOpen, setIsAuthOpen] = useState(false); // ✅ login modal
-  const [user, setUser] = useState<User | null>(null); // ✅ user info
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
 
   const [form] = Form.useForm();
 
@@ -170,7 +170,7 @@ export default function TeamBillPage() {
   // ================= Render =================
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
-      {/* ✅ Header cố định giống Dashboard */}
+      {/* ✅ Topbar giống dashboard */}
       <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
 
       <main className="p-6">
@@ -222,7 +222,7 @@ export default function TeamBillPage() {
           />
         </Card>
 
-        {/* Modal thêm/sửa */}
+        {/* Modal thêm/sửa chi tiêu */}
         <Modal
           title={editExpense ? "Sửa chi tiêu" : "Thêm chi tiêu"}
           open={isFormOpen}
@@ -230,36 +230,44 @@ export default function TeamBillPage() {
           onOk={handleSave}
           okText="Lưu"
           cancelText="Hủy"
+          width="100%"
+          style={{ maxWidth: "700px" }} // ✅ modal rộng vừa, giống dashboard
+          bodyStyle={{ padding: "24px" }}
+          centered
         >
-          <Form layout="vertical" form={form}>
+          <Form layout="vertical" form={form} className="w-full">
             <Form.Item
               name="title"
               label="Tiêu đề"
               rules={[{ required: true, message: "Nhập tiêu đề" }]}
             >
-              <Input />
+              <Input className="w-full" />
             </Form.Item>
             <Form.Item
               name="amount"
               label="Số tiền"
               rules={[{ required: true, message: "Nhập số tiền" }]}
             >
-              <Input type="number" placeholder="Nhập số tiền (VD: 500000)" />
+              <Input
+                type="number"
+                placeholder="Nhập số tiền (VD: 500000)"
+                className="w-full"
+              />
             </Form.Item>
             <Form.Item name="category" label="Loại">
-              <Input />
+              <Input className="w-full" />
             </Form.Item>
             <Form.Item name="person" label="Người chịu">
-              <Input />
+              <Input className="w-full" />
             </Form.Item>
             <Form.Item name="status" label="Trạng thái">
-              <Select>
+              <Select className="w-full">
                 <Select.Option value="CHỜ">CHỜ</Select.Option>
                 <Select.Option value="HOÀN TẤT">HOÀN TẤT</Select.Option>
               </Select>
             </Form.Item>
             <Form.Item name="date" label="Ngày">
-              <Input type="date" />
+              <Input type="date" className="w-full" />
             </Form.Item>
           </Form>
         </Modal>

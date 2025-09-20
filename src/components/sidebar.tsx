@@ -14,7 +14,7 @@ type MenuItem = {
 
 // Danh sách menu (chia nhóm)
 const mainFeatures: MenuItem[] = [
-  { name: "Bảng điều khiển", href: "/", icon: Home },
+  { name: "Bảng điều khiển", href: "/dashboard", icon: Home },
   { name: "Quản lý chi tiêu", href: "/expenses", icon: CreditCard },
   { name: "Bạn bè", href: "/friends", icon: UserPlus },
   { name: "Chia hoá đơn", href: "/split", icon: Split },

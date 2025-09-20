@@ -5,6 +5,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import {
   Modal,
+  Card,
   Button,
   Table,
   Space,
@@ -55,10 +56,6 @@ export default function TeamMembersPage() {
 
   const [form] = Form.useForm();
 
-  // Search & Filter trong modal
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | MemberStatus>("ALL");
-
   // ================= API =================
   const loadGroupsWithMembers = async () => {
     try {
@@ -81,65 +78,17 @@ export default function TeamMembersPage() {
     if (!openGroup) return;
     try {
       const values = await form.validateFields();
-      let newMember: Member;
-
       if (editingMember) {
-        const res = await axios.put(
-          `${API_URL}/members/${editingMember._id}`,
-          values
-        );
-        newMember = res.data;
-
-        setOpenGroup((prev) =>
-          prev
-            ? {
-                ...prev,
-                members: prev.members.map((m) =>
-                  m._id === newMember._id ? newMember : m
-                ),
-              }
-            : prev
-        );
-
-        setGroups((prev) =>
-          prev.map((g) =>
-            g._id === openGroup._id
-              ? {
-                  ...g,
-                  members: g.members.map((m) =>
-                    m._id === newMember._id ? newMember : m
-                  ),
-                }
-              : g
-          )
-        );
-
+        await axios.put(`${API_URL}/members/${editingMember._id}`, values);
         toast.success("✅ Cập nhật thành viên thành công!");
       } else {
-        const res = await axios.post(
-          `${API_URL}/teams/${openGroup._id}/members`,
-          values
-        );
-        newMember = res.data;
-
-        setOpenGroup((prev) =>
-          prev ? { ...prev, members: [...prev.members, newMember] } : prev
-        );
-
-        setGroups((prev) =>
-          prev.map((g) =>
-            g._id === openGroup._id
-              ? { ...g, members: [...g.members, newMember] }
-              : g
-          )
-        );
-
+        await axios.post(`${API_URL}/teams/${openGroup._id}/members`, values);
         toast.success("✅ Thêm thành viên mới thành công!");
       }
-
       setIsMemberModalOpen(false);
       form.resetFields();
       setEditingMember(null);
+      loadGroupsWithMembers();
     } catch {
       toast.error("❌ Lỗi khi lưu thành viên");
     }
@@ -149,36 +98,11 @@ export default function TeamMembersPage() {
     if (!confirm("Bạn có chắc muốn xóa thành viên này?")) return;
     try {
       await axios.delete(`${API_URL}/members/${id}`);
-
-      setOpenGroup((prev) =>
-        prev ? { ...prev, members: prev.members.filter((m) => m._id !== id) } : prev
-      );
-
-      setGroups((prev) =>
-        prev.map((g) =>
-          g._id === openGroup?._id
-            ? { ...g, members: g.members.filter((m) => m._id !== id) }
-            : g
-        )
-      );
-
       toast.success("🗑️ Xóa thành viên thành công!");
+      loadGroupsWithMembers();
     } catch {
       toast.error("❌ Lỗi khi xóa thành viên");
     }
-  };
-
-  // ================= Filter Members =================
-  const getFilteredMembers = () => {
-    if (!openGroup) return [];
-    return openGroup.members.filter((m) => {
-      const matchesSearch =
-        m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        m.email.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus =
-        statusFilter === "ALL" ? true : m.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
   };
 
   // ================= Columns Table =================
@@ -230,13 +154,13 @@ export default function TeamMembersPage() {
     },
   ];
 
-  // ================= Render =================
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
       {/* ✅ Header */}
       <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
 
       <main className="p-6">
+        <Card title="Nhóm" className="w-full">
         {loading ? (
           <p className="text-center text-gray-500">Đang tải dữ liệu...</p>
         ) : (
@@ -275,6 +199,7 @@ export default function TeamMembersPage() {
             ))}
           </div>
         )}
+        </Card>
       </main>
 
       {/* Auth Modal */}
@@ -292,43 +217,21 @@ export default function TeamMembersPage() {
         footer={null}
         width={800}
       >
-        {/* Search + Filter */}
-<div className="flex items-center gap-4 mb-4">
-  <Input
-    placeholder="Tìm kiếm theo tên hoặc email..."
-    value={searchQuery}
-    onChange={(e) => setSearchQuery(e.target.value)}
-    className="w-64"
-  />
-  <Select
-    value={statusFilter}
-    onChange={(val) => setStatusFilter(val)}
-    style={{ width: 160 }}
-  >
-    <Select.Option value="ALL">Tất cả</Select.Option>
-    <Select.Option value={MemberStatus.Active}>Hoạt động</Select.Option>
-    <Select.Option value={MemberStatus.Inactive}>Ngưng hoạt động</Select.Option>
-  </Select>
-
-  {/* ✅ Chỉ Leader mới thấy nút thêm */}
-  {user?.role === "Leader" && (
-    <Button
-      type="primary"
-      className="ml-auto"
-      onClick={() => {
-        form.resetFields();
-        setEditingMember(null);
-        setIsMemberModalOpen(true);
-      }}
-    >
-      + Add Member
-    </Button>
-  )}
-</div>
-
+        <div className="mb-4 text-right">
+          <Button
+            type="primary"
+            onClick={() => {
+              form.resetFields();
+              setEditingMember(null);
+              setIsMemberModalOpen(true);
+            }}
+          >
+            + Add Member
+          </Button>
+        </div>
         <Table
           rowKey="_id"
-          dataSource={getFilteredMembers()}
+          dataSource={openGroup?.members || []}
           columns={memberColumns}
           pagination={false}
         />
@@ -354,25 +257,17 @@ export default function TeamMembersPage() {
           <Form.Item
             name="email"
             label="Email"
-            rules={[
-              { required: true, type: "email", message: "Email không hợp lệ" },
-            ]}
+            rules={[{ required: true, type: "email", message: "Email không hợp lệ" }]}
           >
             <Input />
           </Form.Item>
           <Form.Item name="role" label="Vai trò">
             <Input />
           </Form.Item>
-          <Form.Item
-            name="status"
-            label="Trạng thái"
-            initialValue={MemberStatus.Active}
-          >
+          <Form.Item name="status" label="Trạng thái" initialValue={MemberStatus.Active}>
             <Select>
               <Select.Option value={MemberStatus.Active}>Hoạt động</Select.Option>
-              <Select.Option value={MemberStatus.Inactive}>
-                Ngưng hoạt động
-              </Select.Option>
+              <Select.Option value={MemberStatus.Inactive}>Ngưng hoạt động</Select.Option>
             </Select>
           </Form.Item>
         </Form>

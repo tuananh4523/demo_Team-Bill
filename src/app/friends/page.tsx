@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   Tag,
@@ -12,9 +12,11 @@ import {
   Form,
   Input,
   Select,
+  message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
+import axios from "axios";
 import Topbar from "@/components/Topbar";
 import AuthModal, { User } from "@/app/login/AuthModal";
 
@@ -28,29 +30,10 @@ type Friend = {
   avatar?: string;
 };
 
-const initialData: Friend[] = [
-  {
-    key: "1",
-    name: "Ian Chesnut",
-    email: "ian.chesnut@gmail.com",
-    role: "Super Admin",
-    groups: ["Falcons", "Stallions"],
-    status: "Active",
-    avatar: "https://i.pravatar.cc/40?img=1",
-  },
-  {
-    key: "2",
-    name: "Zeki Mokharzada",
-    email: "zeki@gmail.com",
-    role: "Admin",
-    groups: ["Falcons", "Stallions"],
-    status: "Inactive",
-    avatar: "https://i.pravatar.cc/40?img=2",
-  },
-];
+const API_URL = "http://localhost:8080/api";
 
 export default function FriendsPage() {
-  const [data, setData] = useState<Friend[]>(initialData);
+  const [data, setData] = useState<Friend[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Friend | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -58,6 +41,45 @@ export default function FriendsPage() {
 
   const [form] = Form.useForm();
 
+  // ================= Load dữ liệu từ API =================
+  const loadData = async () => {
+    try {
+      const [membersRes, teamsRes] = await Promise.all([
+        axios.get(`${API_URL}/members`),
+        axios.get(`${API_URL}/teams`),
+      ]);
+
+      const members = membersRes.data; // [{_id, name, email, role, status, teamId}]
+      const teams = teamsRes.data; // [{_id, name, members: [...] }]
+
+      // Map member -> Friend
+      const mappedData: Friend[] = members.map((m: any) => {
+        const groups = teams
+          .filter((t: any) => t.members.some((tm: any) => tm._id === m._id))
+          .map((t: any) => t.name);
+
+        return {
+          key: m._id,
+          name: m.name,
+          email: m.email,
+          role: m.role || "Thành viên",
+          groups,
+          status: m.status === "Active" ? "Active" : "Inactive",
+          avatar: `https://i.pravatar.cc/40?u=${m.email}`,
+        };
+      });
+
+      setData(mappedData);
+    } catch (err) {
+      message.error("❌ Lỗi tải dữ liệu bạn bè");
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // ================= CRUD =================
   const handleOpenModal = (user?: Friend) => {
     if (user) {
       setEditingUser(user);
@@ -69,36 +91,38 @@ export default function FriendsPage() {
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
-    form.validateFields().then((values) => {
+  const handleSave = async () => {
+    try {
+      const values = await form.validateFields();
       if (editingUser) {
-        // Update user
-        setData((prev) =>
-          prev.map((u) =>
-            u.key === editingUser.key ? { ...editingUser, ...values } : u
-          )
-        );
+        await axios.put(`${API_URL}/members/${editingUser.key}`, values);
+        message.success("✅ Cập nhật bạn thành công!");
       } else {
-        // Add new user
-        const newUser: Friend = {
-          key: String(Date.now()),
-          ...values,
-          avatar: `https://i.pravatar.cc/40?u=${values.email}`,
-        };
-        setData((prev) => [...prev, newUser]);
+        await axios.post(`${API_URL}/members`, values);
+        message.success("✅ Thêm bạn mới thành công!");
       }
       setIsModalOpen(false);
       form.resetFields();
-    });
+      loadData();
+    } catch {
+      message.error("❌ Lỗi khi lưu bạn bè");
+    }
   };
 
-  const handleDelete = (key: string) => {
-    setData((prev) => prev.filter((item) => item.key !== key));
+  const handleDelete = async (id: string) => {
+    try {
+      await axios.delete(`${API_URL}/members/${id}`);
+      message.success("🗑️ Xoá thành công");
+      loadData();
+    } catch {
+      message.error("❌ Lỗi khi xoá bạn bè");
+    }
   };
 
+  // ================= Table Columns =================
   const columns: ColumnsType<Friend> = [
     {
-      title: "Name",
+      title: "Tên",
       dataIndex: "name",
       render: (_, record) => (
         <div className="flex items-center gap-2">
@@ -111,37 +135,37 @@ export default function FriendsPage() {
       ),
     },
     {
-      title: "Role",
+      title: "Vai trò",
       dataIndex: "role",
     },
     {
-      title: "Groups",
+      title: "Nhóm",
       dataIndex: "groups",
       render: (groups: string[]) => groups.join(", "),
     },
     {
-      title: "Status",
+      title: "Trạng thái",
       dataIndex: "status",
       render: (status) =>
         status === "Active" ? (
-          <Tag color="green">Active</Tag>
+          <Tag color="green">Hoạt động</Tag>
         ) : (
-          <Tag color="red">Inactive</Tag>
+          <Tag color="red">Ngưng hoạt động</Tag>
         ),
     },
     {
-      title: "Actions",
+      title: "Hành động",
       key: "actions",
       render: (_, record) => (
         <Space>
           <Button type="link" onClick={() => handleOpenModal(record)}>
-            Edit
+            Sửa
           </Button>
-          <Button type="link" onClick={() => console.log("Reset password")}>
-            Reset Password
+          <Button type="link" onClick={() => console.log("Reset mật khẩu")}>
+            Đặt lại mật khẩu
           </Button>
           <Button type="link" danger onClick={() => handleDelete(record.key)}>
-            Delete
+            Xoá
           </Button>
         </Space>
       ),
@@ -162,7 +186,7 @@ export default function FriendsPage() {
               icon={<PlusOutlined />}
               onClick={() => handleOpenModal()}
             >
-              Add New User
+              Thêm bạn mới
             </Button>
           }
         >
@@ -183,40 +207,40 @@ export default function FriendsPage() {
         onLoginSuccess={(u) => setUser(u)}
       />
 
-      {/* Modal Add/Edit User */}
+      {/* Modal Thêm/Sửa bạn */}
       <Modal
-        title={editingUser ? "Edit User" : "Add New User"}
+        title={editingUser ? "Sửa thông tin bạn" : "Thêm bạn mới"}
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
         onOk={handleSave}
-        okText="Save"
-        cancelText="Cancel"
+        okText="Lưu"
+        cancelText="Huỷ"
       >
         <Form layout="vertical" form={form}>
           <Form.Item
             name="name"
-            label="Name"
-            rules={[{ required: true, message: "Please enter name" }]}
+            label="Tên"
+            rules={[{ required: true, message: "Vui lòng nhập tên" }]}
           >
             <Input />
           </Form.Item>
           <Form.Item
             name="email"
             label="Email"
-            rules={[{ required: true, type: "email", message: "Invalid email" }]}
+            rules={[{ required: true, type: "email", message: "Email không hợp lệ" }]}
           >
             <Input />
           </Form.Item>
-          <Form.Item name="role" label="Role">
+          <Form.Item name="role" label="Vai trò">
             <Input />
           </Form.Item>
-          <Form.Item name="groups" label="Groups">
-            <Select mode="tags" placeholder="Add groups" />
+          <Form.Item name="groups" label="Nhóm">
+            <Select mode="tags" placeholder="Thêm nhóm" />
           </Form.Item>
-          <Form.Item name="status" label="Status" initialValue="Active">
+          <Form.Item name="status" label="Trạng thái" initialValue="Active">
             <Select>
-              <Select.Option value="Active">Active</Select.Option>
-              <Select.Option value="Inactive">Inactive</Select.Option>
+              <Select.Option value="Active">Hoạt động</Select.Option>
+              <Select.Option value="Inactive">Ngưng hoạt động</Select.Option>
             </Select>
           </Form.Item>
         </Form>

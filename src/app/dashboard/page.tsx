@@ -119,7 +119,10 @@ export default function DashboardPage() {
       title: "Số tiền",
       dataIndex: "amount",
       render: (val: number) =>
-        `${val.toLocaleString("vi-VN", { style: "currency", currency: "VND" })}`,
+        `${val.toLocaleString("vi-VN", {
+          style: "currency",
+          currency: "VND",
+        })}`,
     },
     {
       title: "Danh mục",
@@ -142,57 +145,59 @@ export default function DashboardPage() {
   // ======================= Render =======================
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
-      {/* Thanh topbar */}
+      {/* ✅ Topbar cố định */}
       <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
 
       <main className="flex-1 p-6">
         <Breadcrumb />
 
         {/* Stats */}
-        <Row gutter={16} className="mb-6">
-          <Col xs={24} md={6}>
-            <Card>
-              <Statistic
-                title="Tổng chi tiêu"
-                value={total}
-                suffix="VND"
-                valueStyle={{ color: "#cf1322" }}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} md={6}>
-            <Card>
-              <Statistic
-                title="Thành viên"
-                value={members.length}
-                valueStyle={{ color: "#faad14" }}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} md={6}>
-            <Card>
-              <Statistic
-                title="Thanh toán chờ xử lý"
-                value={pending}
-                suffix="VND"
-                valueStyle={{ color: "#cf1322" }}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} md={6}>
-            <Card>
-              <Statistic
-                title="Tháng này"
-                value={total}
-                suffix="VND"
-                valueStyle={{ color: "#52c41a" }}
-              />
-            </Card>
-          </Col>
-        </Row>
+        <Card title="Thống kê" className="mb-6 w-full">
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={12} md={6}>
+              <div className="bg-white rounded-lg shadow-sm p-4 h-full flex items-center justify-center">
+                <Statistic
+                  title="Tổng chi tiêu"
+                  value={total}
+                  suffix="VND"
+                  valueStyle={{ color: "#cf1322" }}
+                />
+              </div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <div className="bg-white rounded-lg shadow-sm p-4 h-full flex items-center justify-center">
+                <Statistic
+                  title="Thành viên"
+                  value={members.length}
+                  valueStyle={{ color: "#faad14" }}
+                />
+              </div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <div className="bg-white rounded-lg shadow-sm p-4 h-full flex items-center justify-center">
+                <Statistic
+                  title="Thanh toán chờ xử lý"
+                  value={pending}
+                  suffix="VND"
+                  valueStyle={{ color: "#cf1322" }}
+                />
+              </div>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <div className="bg-white rounded-lg shadow-sm p-4 h-full flex items-center justify-center">
+                <Statistic
+                  title="Tháng này"
+                  value={total}
+                  suffix="VND"
+                  valueStyle={{ color: "#52c41a" }}
+                />
+              </div>
+            </Col>
+          </Row>
+        </Card>
 
         {/* Main Content */}
-        <Row gutter={16}>
+        <Row gutter={[16, 16]}>
           <Col xs={24} lg={16}>
             <Card
               title="Chi tiêu gần đây"
@@ -201,27 +206,29 @@ export default function DashboardPage() {
                   + Thêm chi tiêu
                 </Button>
               }
+              className="w-full"
             >
               <Table
                 rowKey="_id"
                 dataSource={expenses}
                 columns={columns}
                 pagination={false}
-                scroll={{ x: "max-content", y: 400 }}
+                scroll={{ x: "max-content" }}
+                className="w-full"
               />
             </Card>
           </Col>
 
           <Col xs={24} lg={8}>
-            <Card title="Danh mục chi tiêu">
+            <Card title="Danh mục chi tiêu" className="w-full">
               <div className="w-full h-64">
-                <ResponsiveContainer>
+                <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={categories}
                       cx="50%"
                       cy="50%"
-                      outerRadius={80}
+                      outerRadius="80%"
                       fill="#8884d8"
                       dataKey="value"
                       label={({ name, percent }: PieLabelProps) =>

@@ -4,6 +4,7 @@ import { Input, Avatar, Badge, Button } from "antd";
 import { SearchOutlined, BellOutlined } from "@ant-design/icons";
 import React from "react";
 import { User } from "@/app/login/AuthModal";
+import Breadcrumb from "@/components/Breadcrumb"
 
 type TopbarProps = {
   user: User | null;
@@ -15,7 +16,7 @@ export default function Topbar({ user, onAvatarClick, onSearch }: TopbarProps) {
   return (
     <div className="flex items-center justify-between w-full bg-white px-6 py-2 border-b border-gray-200">
       {/* Bên trái có thể để Breadcrumb hoặc logo */}
-      <div className="font-semibold text-gray-600">Team Management</div>
+      <div className="font-semibold text-gray-600"><Breadcrumb/></div>
 
       {/* Bên phải */}
       <div className="flex items-center gap-4">

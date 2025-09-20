@@ -26,40 +26,41 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const url = isLogin
-        ? "http://localhost:8080/api/signin"
-        : "http://localhost:8080/api/signup";
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  try {
+    const url = isLogin
+      ? "http://localhost:8080/api/user/signin"
+      : "http://localhost:8080/api/user/signup";
 
-      const payload = isLogin
-        ? { username, password }
-        : { username, password, email, age };
+    const payload = isLogin
+      ? { username, password }
+      : { username, password, email, age };
 
-      const res = await axios.post<User>(url, payload);
+    const res = await axios.post<User>(url, payload);
 
-      if (isLogin) {
-        setMessage(`Đăng nhập thành công! Xin chào ${res.data.username || username}`);
-        if (res.data.token) localStorage.setItem("token", res.data.token);
-        onLoginSuccess(res.data);
-        onClose();
-      } else {
-        setMessage("Đăng ký thành công! Hãy đăng nhập");
-        const agree = window.confirm("Đăng ký thành công! Bạn có muốn chuyển sang đăng nhập không?");
-        if (agree) {
-          setIsLogin(true);
-          setMessage("");
-        }
-      }
-    } catch (error: unknown) {
-      if (axios.isAxiosError(error)) {
-        setMessage(error.response?.data?.message || error.response?.data?.error || "Có lỗi xảy ra");
-      } else {
-        setMessage("Lỗi không xác định");
+    if (isLogin) {
+      setMessage(`Đăng nhập thành công! Xin chào ${res.data.username || username}`);
+      if (res.data.token) localStorage.setItem("token", res.data.token);
+      onLoginSuccess(res.data);
+      onClose();
+    } else {
+      setMessage("Đăng ký thành công! Hãy đăng nhập");
+      const agree = window.confirm("Đăng ký thành công! Bạn có muốn chuyển sang đăng nhập không?");
+      if (agree) {
+        setIsLogin(true);
+        setMessage("");
       }
     }
-  };
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      setMessage(error.response?.data?.message || error.response?.data?.error || "Có lỗi xảy ra");
+    } else {
+      setMessage("Lỗi không xác định");
+    }
+  }
+};
+
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-50">

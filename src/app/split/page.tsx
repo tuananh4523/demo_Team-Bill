@@ -30,7 +30,6 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import googleCalendarPlugin from "@fullcalendar/google-calendar";
-import viLocale from "@fullcalendar/core/locales/vi";
 
 // ================= Types =================
 export type Member = {
@@ -84,7 +83,7 @@ export default function BillSplitPage() {
         const res = await axios.get(`${API_BASE}/teams`);
         setGroups(res.data);
       } catch {
-        message.error("❌ Lỗi load teams");
+        message.error("Lỗi load teams");
       } finally {
         setLoading(false);
       }
@@ -101,7 +100,7 @@ export default function BillSplitPage() {
       setFilteredEvents(res.data);
       setIsFiltered(false);
     } catch {
-      message.error("❌ Lỗi load events theo group");
+      message.error("Lỗi load events theo group");
     } finally {
       setLoading(false);
     }
@@ -129,10 +128,10 @@ export default function BillSplitPage() {
 
       if (editingEvent) {
         await axios.put(`${API_BASE}/splits/${editingEvent._id}`, payload);
-        message.success("✅ Cập nhật sự kiện thành công");
+        message.success("Cập nhật sự kiện thành công");
       } else {
         await axios.post(`${API_BASE}/splits`, payload);
-        message.success("✅ Thêm sự kiện thành công");
+        message.success("Thêm sự kiện thành công");
       }
 
       setIsModalOpen(false);
@@ -142,7 +141,7 @@ export default function BillSplitPage() {
       loadEventsByGroup(selectedGroup._id);
     } catch (err) {
       console.error(err);
-      message.error("❌ Lỗi khi lưu sự kiện");
+      message.error("Lỗi khi lưu sự kiện");
     }
   };
 
@@ -156,7 +155,7 @@ export default function BillSplitPage() {
       loadEventsByGroup(selectedGroup._id);
       if (selectedEvent?._id === id) setSelectedEvent(null);
     } catch {
-      message.error("❌ Lỗi xoá event");
+      message.error("Lỗi xoá event");
     }
   };
 
@@ -199,22 +198,15 @@ export default function BillSplitPage() {
                     googleCalendarPlugin,
                   ]}
                   initialView="timeGridWeek"
-                  googleCalendarApiKey="YOUR_GOOGLE_API_KEY" // 🔑 thay bằng API key thật
+                  googleCalendarApiKey="YOUR_GOOGLE_API_KEY" // 🔑 thay bằng API Key thật
                   events={{
                     googleCalendarId:
-                      "your_calendar_id@group.calendar.google.com", // 🔑 thay bằng Calendar ID thật
+                      "your_calendar_id@group.calendar.google.com", // 🔑 thay Calendar ID
                   }}
                   headerToolbar={{
                     left: "prev,next today",
                     center: "title",
                     right: "dayGridMonth,timeGridWeek,timeGridDay",
-                  }}
-                  locale={viLocale} // ✅ chuyển sang tiếng Việt
-                  buttonText={{
-                    today: "Hôm nay",
-                    month: "Tháng",
-                    week: "Tuần",
-                    day: "Ngày",
                   }}
                   height="auto"
                   selectable={true}
@@ -223,7 +215,7 @@ export default function BillSplitPage() {
                     alert(`📅 Sự kiện: ${info.event.title}`);
                   }}
                   dateClick={(info) => {
-                    message.info(`Bạn chọn ngày: ${info.dateStr}`);
+                    message.info(`Bạn click ngày: ${info.dateStr}`);
                   }}
                 />
               </Card>

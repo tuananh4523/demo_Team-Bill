@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Home, CreditCard, Users, UserPlus , Split, Wallet, Settings, BarChart } from "lucide-react"
+import { Home, CreditCard, Users, UserPlus, Wallet, Settings, BarChart } from "lucide-react"
 import { usePathname } from "next/navigation"
 import clsx from "clsx"
 
@@ -17,7 +17,7 @@ const mainFeatures: MenuItem[] = [
   { name: "Bảng điều khiển", href: "/dashboard", icon: Home },
   { name: "Quản lý chi tiêu", href: "/expenses", icon: CreditCard },
   { name: "Bạn bè", href: "/friends", icon: UserPlus },
-  { name: "Chia hoá đơn", href: "/split", icon: Split },
+  // { name: "Chia hoá đơn", href: "/split", icon: Split },
   { name: "Nhóm", href: "/teams", icon: Users },
 ]
 

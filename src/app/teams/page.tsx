@@ -15,6 +15,7 @@ import {
   Avatar,
   Tag,
 } from "antd";
+import { useRouter } from "next/navigation";
 import Topbar from "@/components/Topbar";
 import AuthModal, { User } from "@/app/login/AuthModal";
 
@@ -47,20 +48,19 @@ export default function TeamMembersPage() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
-  // Modal group detail
   const [openGroup, setOpenGroup] = useState<Group | null>(null);
 
-  // Modal add/edit member
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
   const [form] = Form.useForm();
+  const router = useRouter();
 
   // ================= API =================
   const loadGroupsWithMembers = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_URL}/teams`);
+      const res = await axios.get<Group[]>(`${API_URL}/teams`);
       setGroups(res.data);
     } catch {
       toast.error("Không thể tải danh sách nhóm!");
@@ -80,17 +80,17 @@ export default function TeamMembersPage() {
       const values = await form.validateFields();
       if (editingMember) {
         await axios.put(`${API_URL}/members/${editingMember._id}`, values);
-        toast.success("✅ Cập nhật thành viên thành công!");
+        toast.success("Cập nhật thành viên thành công!");
       } else {
         await axios.post(`${API_URL}/teams/${openGroup._id}/members`, values);
-        toast.success("✅ Thêm thành viên mới thành công!");
+        toast.success("Thêm thành viên mới thành công!");
       }
       setIsMemberModalOpen(false);
       form.resetFields();
       setEditingMember(null);
       loadGroupsWithMembers();
     } catch {
-      toast.error("❌ Lỗi khi lưu thành viên");
+      toast.error("Lỗi khi lưu thành viên");
     }
   };
 
@@ -98,19 +98,31 @@ export default function TeamMembersPage() {
     if (!confirm("Bạn có chắc muốn xóa thành viên này?")) return;
     try {
       await axios.delete(`${API_URL}/members/${id}`);
-      toast.success("🗑️ Xóa thành viên thành công!");
+      toast.success("Xóa thành viên thành công!");
       loadGroupsWithMembers();
     } catch {
-      toast.error("❌ Lỗi khi xóa thành viên");
+      toast.error("Lỗi khi xóa thành viên");
     }
   };
+
+  // ================= Helper: slugify group name =================
+ const slugify = (str: string) =>
+  str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // bỏ dấu
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+
 
   // ================= Columns Table =================
   const memberColumns = [
     {
       title: "Tên",
       dataIndex: "name",
-      render: (_: any, record: Member) => (
+      render: (_: unknown, record: Member) => (
         <div className="flex items-center gap-2">
           <Avatar src={`https://i.pravatar.cc/40?u=${record._id}`} />
           <div>
@@ -134,7 +146,7 @@ export default function TeamMembersPage() {
     {
       title: "Hành động",
       key: "actions",
-      render: (_: any, record: Member) => (
+      render: (_: unknown, record: Member) => (
         <Space>
           <Button
             type="link"
@@ -146,7 +158,11 @@ export default function TeamMembersPage() {
           >
             Sửa
           </Button>
-          <Button type="link" danger onClick={() => handleDeleteMember(record._id)}>
+          <Button
+            type="link"
+            danger
+            onClick={() => handleDeleteMember(record._id)}
+          >
             Xóa
           </Button>
         </Space>
@@ -156,49 +172,55 @@ export default function TeamMembersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
-      {/* ✅ Header */}
       <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
 
       <main className="p-6">
         <Card title="Nhóm" className="w-full">
-        {loading ? (
-          <p className="text-center text-gray-500">Đang tải dữ liệu...</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {groups.map((group) => (
-              <div
-                key={group._id}
-                onClick={() => setOpenGroup(group)}
-                className="bg-white rounded-xl shadow p-5 hover:shadow-md transition cursor-pointer"
-              >
-                <div className="flex justify-between items-center mb-3">
-                  <h2 className="text-lg font-semibold">{group.name}</h2>
-                  <span
-                    className={`px-2 py-1 text-xs rounded-full ${
-                      group.members.some((m) => m.status === MemberStatus.Active)
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {group.members.some((m) => m.status === MemberStatus.Active)
-                      ? "Active"
-                      : "Inactive"}
-                  </span>
+          {loading ? (
+            <p className="text-center text-gray-500">Đang tải dữ liệu...</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {groups.map((group) => (
+                <div
+                  key={group._id}
+                  onClick={() => setOpenGroup(group)}
+                  className="bg-white rounded-xl shadow p-5 hover:shadow-md transition cursor-pointer"
+                >
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-lg font-semibold">{group.name}</h2>
+                    <span
+                      className={`px-2 py-1 text-xs rounded-full ${
+                        group.members.some(
+                          (m) => m.status === MemberStatus.Active
+                        )
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {group.members.some(
+                        (m) => m.status === MemberStatus.Active
+                      )
+                        ? "Active"
+                        : "Inactive"}
+                    </span>
+                  </div>
+                  <div className="flex -space-x-2">
+                    {group.members.slice(0, 4).map((m) => (
+                      <Avatar
+                        key={m._id}
+                        src={`https://i.pravatar.cc/32?u=${m._id}`}
+                      />
+                    ))}
+                    {group.members.length > 4 && (
+                      <div className="w-8 h-8 flex items-center justify-center bg-gray-200 text-xs rounded-full border-2 border-white">
+                        +{group.members.length - 4}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex -space-x-2">
-                  {group.members.slice(0, 4).map((m) => (
-                    <Avatar key={m._id} src={`https://i.pravatar.cc/32?u=${m._id}`} />
-                  ))}
-                  {group.members.length > 4 && (
-                    <div className="w-8 h-8 flex items-center justify-center bg-gray-200 text-xs rounded-full border-2 border-white">
-                      +{group.members.length - 4}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
         </Card>
       </main>
 
@@ -217,7 +239,7 @@ export default function TeamMembersPage() {
         footer={null}
         width={800}
       >
-        <div className="mb-4 text-right">
+        <div className="mb-4 flex justify-between">
           <Button
             type="primary"
             onClick={() => {
@@ -228,7 +250,18 @@ export default function TeamMembersPage() {
           >
             + Add Member
           </Button>
+          <Button
+            onClick={() => {
+              if (openGroup) {
+                const groupSlug = slugify(openGroup.name);
+                router.push(`/split/${groupSlug}`); // 👉 dùng slug tên nhóm
+              }
+            }}
+          >
+            Chia hóa đơn
+          </Button>
         </div>
+
         <Table
           rowKey="_id"
           dataSource={openGroup?.members || []}
@@ -257,17 +290,27 @@ export default function TeamMembersPage() {
           <Form.Item
             name="email"
             label="Email"
-            rules={[{ required: true, type: "email", message: "Email không hợp lệ" }]}
+            rules={[
+              { required: true, type: "email", message: "Email không hợp lệ" },
+            ]}
           >
             <Input />
           </Form.Item>
           <Form.Item name="role" label="Vai trò">
             <Input />
           </Form.Item>
-          <Form.Item name="status" label="Trạng thái" initialValue={MemberStatus.Active}>
+          <Form.Item
+            name="status"
+            label="Trạng thái"
+            initialValue={MemberStatus.Active}
+          >
             <Select>
-              <Select.Option value={MemberStatus.Active}>Hoạt động</Select.Option>
-              <Select.Option value={MemberStatus.Inactive}>Ngưng hoạt động</Select.Option>
+              <Select.Option value={MemberStatus.Active}>
+                Hoạt động
+              </Select.Option>
+              <Select.Option value={MemberStatus.Inactive}>
+                Ngưng hoạt động
+              </Select.Option>
             </Select>
           </Form.Item>
         </Form>
@@ -275,3 +318,5 @@ export default function TeamMembersPage() {
     </div>
   );
 }
+
+

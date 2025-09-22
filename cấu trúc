@@ -1,0 +1,42 @@
+src/
+ ├── app/
+ │   ├── (auth)/
+ │   │   ├── login/page.tsx
+ │   │   └── register/page.tsx
+ │   ├── (dashboard)/
+ │   │   ├── page.tsx
+ │   │   ├── groups/page.tsx
+ │   │   ├── expenses/page.tsx
+ │   │   └── split/[id]/page.tsx
+ │   └── api/
+ │       ├── teams/route.ts
+ │       └── expenses/route.ts
+ │
+ ├── components/
+ │   ├── layout/Sidebar.tsx
+ │   ├── layout/Topbar.tsx
+ │   ├── cards/TeamCard.tsx
+ │   ├── cards/ExpenseCard.tsx
+ │   ├── common/AuthModal.tsx
+ │   └── calendar/EventGroup.tsx
+ │
+ ├── features/
+ │   ├── groups/
+ │   │   ├── GroupList.tsx
+ │   │   └── GroupDetail.tsx
+ │   ├── expenses/
+ │   └── billing/
+ │
+ ├── hooks/
+ │   ├── useAuth.ts
+ │   └── useFetch.ts
+ │
+ ├── lib/
+ │   ├── api.ts
+ │   ├── utils.ts
+ │   └── constants.ts
+ │
+ ├── types/
+ │   ├── user.ts
+ │   ├── group.ts
+ │   └── expense.ts

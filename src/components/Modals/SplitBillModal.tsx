@@ -14,8 +14,9 @@ import {
   DatePicker,
   Tooltip,
 } from "antd";
-import { DeleteOutlined } from "@ant-design/icons";
+import { DeleteOutlined, CheckOutlined } from "@ant-design/icons";
 import type { Dayjs } from "dayjs";
+import axios from "axios";
 
 type SplitType = "equally" | "unequally";
 
@@ -23,18 +24,11 @@ type SplitBillFormProps = {
   selectedDate?: Dayjs;
 };
 
-// Mock nhóm để demo (thực tế bạn có thể fetch từ API)
+const API_BASE = "http://localhost:8080/api";
+
 const mockGroups = [
-  {
-    id: "g1",
-    name: "Nhóm bạn bè",
-    members: ["An", "Bình", "Chi"],
-  },
-  {
-    id: "g2",
-    name: "Nhóm công ty",
-    members: ["Dũng", "Hà", "Linh", "Minh"],
-  },
+  { id: "g1", name: "Nhóm bạn bè", members: ["An", "Bình", "Chi"] },
+  { id: "g2", name: "Nhóm công ty", members: ["Dũng", "Hà", "Linh", "Minh"] },
 ];
 
 type SplitBillFormValues = {
@@ -42,19 +36,31 @@ type SplitBillFormValues = {
   participantName?: string;
   paidBy?: string;
   date?: Dayjs;
+  category?: string;
+  note?: string;
+  color?: string;
 };
+
+const COLORS = [
+  { label: "Xanh dương", value: "#3B82F6" },
+  { label: "Đỏ", value: "#EF4444" },
+  { label: "Xanh lá", value: "#10B981" },
+  { label: "Vàng", value: "#FACC15" },
+  { label: "Tím", value: "#8B5CF6" },
+  { label: "Xám", value: "#6B7280" },
+];
 
 export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
   const [form] = Form.useForm<SplitBillFormValues>();
   const [participants, setParticipants] = useState<string[]>([]);
   const [splitType, setSplitType] = useState<SplitType>("equally");
   const [showAll, setShowAll] = useState(false);
-  const [customAmounts, setCustomAmounts] = useState<Record<string, number>>(
-    {}
-  );
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [customAmounts, setCustomAmounts] = useState<Record<string, number>>({});
   const [result, setResult] = useState<
     { from: string; to: string; amount: number }[]
   >([]);
+  const [saving, setSaving] = useState(false);
 
   // ===== Thêm thành viên đơn =====
   const addParticipant = (name?: string) => {
@@ -76,7 +82,6 @@ export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
     const newMembers = selectedGroups
       .flatMap((g) => g.members)
       .filter((m) => !participants.includes(m));
-
     if (newMembers.length === 0) {
       message.info("Các thành viên trong nhóm đã có hết");
       return;
@@ -130,7 +135,7 @@ export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
           return;
         }
         participants.forEach((p) => {
-          balances[p] = -(customAmounts[p] || 0);
+          balances[p] = -(customAmounts[p] || 0);F
         });
         balances[paidBy] += amount;
       }
@@ -170,10 +175,35 @@ export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
     }
   };
 
+  // ===== Lưu dữ liệu vào API =====
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      const values = form.getFieldsValue();
+      const dataToSave = {
+        ...values,
+        date: values.date?.toISOString(),
+        participants,
+        splitType,
+        result,
+      };
+      await axios.post(`${API_BASE}/expenses`, dataToSave);
+      message.success("Đã lưu hóa đơn thành công!");
+      form.resetFields();
+      setParticipants([]);
+      setResult([]);
+    } catch (err) {
+      console.error(err);
+      message.error("Lỗi khi lưu hóa đơn");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Form<SplitBillFormValues>
       layout="vertical"
-      form={form}
+      form={form}   // ✅ kết nối form instance
       initialValues={{ date: selectedDate }}
     >
       {/* Ngày sự kiện */}
@@ -194,9 +224,71 @@ export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
         <Input placeholder="Nhập số tiền" type="number" />
       </Form.Item>
 
+      {/* Danh mục */}
+      <Form.Item
+        name="category"
+        label="Danh mục chi tiêu"
+        rules={[{ required: true, message: "Chọn danh mục" }]}
+      >
+        <Select placeholder="Chọn danh mục">
+          <Select.Option value="Ăn uống">Ăn uống</Select.Option>
+          <Select.Option value="Shopping">Shopping</Select.Option>
+          <Select.Option value="Cafe">Cafe</Select.Option>
+          <Select.Option value="Đi lại">Đi lại</Select.Option>
+          <Select.Option value="Giải trí">Giải trí</Select.Option>
+          <Select.Option value="Khác">Khác</Select.Option>
+        </Select>
+      </Form.Item>
+
+      {/* Ghi chú */}
+      <Form.Item name="note" label="Ghi chú">
+        <Input.TextArea rows={2} placeholder="Nhập ghi chú (nếu có)" />
+      </Form.Item>
+
+      {/* Chọn màu nền */}
+      <Form.Item name="color" label="Màu nền">
+        <div className="flex gap-2">
+          {COLORS.map((c) => {
+            const selected = form.getFieldValue("color") === c.value;
+            return (
+              <div
+                key={c.value}
+                onClick={() => form.setFieldValue("color", c.value)}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  border: `2px solid ${c.value}`,
+                  backgroundColor: selected ? c.value : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "all 0.25s ease",
+                  boxShadow: selected
+                    ? `0 0 6px ${c.value}aa`
+                    : "inset 0 0 2px rgba(0,0,0,0.2)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = `0 0 6px ${c.value}aa`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = selected
+                    ? `0 0 6px ${c.value}aa`
+                    : "inset 0 0 2px rgba(0,0,0,0.2)";
+                }}
+              >
+                {selected && (
+                  <CheckOutlined style={{ fontSize: 14, color: "white" }} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Form.Item>
+
       {/* Người tham gia */}
       <Form.Item label="Người tham gia (tối thiểu 2)">
-        {/* Thêm từng người */}
         <Space.Compact style={{ width: "100%" }} className="mb-2">
           <Form.Item name="participantName" noStyle>
             <Input placeholder="Tên thành viên" />
@@ -211,7 +303,6 @@ export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
           </Button>
         </Space.Compact>
 
-        {/* Chọn nhiều nhóm */}
         <Select
           mode="multiple"
           placeholder="Chọn nhóm để thêm thành viên"
@@ -225,39 +316,35 @@ export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
           ))}
         </Select>
 
-        {/* Danh sách người tham gia */}
-        {/* Danh sách người tham gia */}
-<div className="mt-3">
-  {(showAll ? participants : participants.slice(0, 5)).map((p, idx) => (
-    <div
-      key={p}
-      className="flex justify-between items-center py-2 border-b border-gray-200"
-    >
-      <span className="text-gray-700">{p}</span>
-      <Tooltip title="Xóa">
-        <Button
-          type="text"
-          size="small"
-          icon={<DeleteOutlined />}
-          onClick={() => removeParticipant(p)}
-        />
-      </Tooltip>
-    </div>
-  ))}
-
-  {participants.length > 5 && (
-    <div className="text-center mt-2">
-      <Button
-        type="link"
-        size="small"
-        onClick={() => setShowAll(!showAll)}
-      >
-        {showAll ? "Thu gọn" : `Xem thêm (${participants.length - 5})`}
-      </Button>
-    </div>
-  )}
-</div>
-
+        <div className="mt-3">
+          {(showAll ? participants : participants.slice(0, 5)).map((p) => (
+            <div
+              key={p}
+              className="flex justify-between items-center py-2 border-b border-gray-200"
+            >
+              <span className="text-gray-700">{p}</span>
+              <Tooltip title="Xóa">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  onClick={() => removeParticipant(p)}
+                />
+              </Tooltip>
+            </div>
+          ))}
+          {participants.length > 5 && (
+            <div className="text-center mt-2">
+              <Button
+                type="link"
+                size="small"
+                onClick={() => setShowAll(!showAll)}
+              >
+                {showAll ? "Thu gọn" : `Xem thêm (${participants.length - 5})`}
+              </Button>
+            </div>
+          )}
+        </div>
       </Form.Item>
 
       {/* Người trả */}
@@ -317,7 +404,7 @@ export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
         Tính toán
       </Button>
 
-      {/* Kết quả */}
+      {/* Kết quả + Nút lưu */}
       {result.length > 0 && (
         <div className="mt-4">
           <h4 className="font-semibold mb-2">Kết quả:</h4>
@@ -327,6 +414,16 @@ export default function SplitBillForm({ selectedDate }: SplitBillFormProps) {
               <Tag color="green">{r.amount.toLocaleString("vi-VN")} VNĐ</Tag>
             </p>
           ))}
+
+          <Button
+            type="primary"
+            block
+            className="mt-3"
+            loading={saving}
+            onClick={handleSave}
+          >
+            Lưu
+          </Button>
         </div>
       )}
     </Form>

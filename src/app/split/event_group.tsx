@@ -34,10 +34,12 @@ export type EventGroupProps = {
   events?: EventItem[];
   selectedDate: Dayjs;
   onDateChange: (date: Dayjs) => void;
-  onAddMember: () => void;
-  onEditMember: (member: Member) => void;
-  onDeleteMember: (id: string) => void;
+  onAddGroup?: () => void;      
+  onAddMember?: () => void;     
+  onEditMember?: (m: Member) => void; 
+  onDeleteMember?: (id: string) => void; 
 };
+
 
 export default function EventGroup({
   members = [],
@@ -72,14 +74,14 @@ export default function EventGroup({
     <div className="w-80 border-r bg-gray-50 flex flex-col overflow-y-auto">
       {/* Header */}
       <div className="p-4 border-b bg-white">
-        <h1 className="text-lg font-bold text-gray-700">
+        <h1 className="text-lg font-bold text-gray-700 text-center">
           Quản lý sự kiện & thành viên
         </h1>
       </div>
 
       {/* Mini Calendar Header */}
       <Card size="small" bordered={false} className="m-4 shadow-sm">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-center">
           <Popover
             open={open}
             onOpenChange={setOpen}
@@ -106,13 +108,13 @@ export default function EventGroup({
                     return (
                       <div
                         className={`flex items-center justify-center w-7 h-7 rounded-full cursor-pointer
-          ${
-            isSelected
-              ? "bg-blue-500 text-white font-bold"
-              : isToday
-              ? "border border-blue-500 text-blue-500 font-semibold"
-              : "text-gray-700"
-          }`}
+                          ${
+                            isSelected
+                              ? "bg-blue-500 text-white font-bold"
+                              : isToday
+                              ? "border border-blue-500 text-blue-500 font-semibold"
+                              : "text-gray-700"
+                          }`}
                       >
                         {date.date()}
                       </div>
@@ -131,65 +133,6 @@ export default function EventGroup({
           </Popover>
         </div>
       </Card>
-
-      {/* Members */}
-      {/* <Card
-        size="small"
-        title={
-          <div className="flex justify-between items-center">
-            <span className="font-semibold">Thành viên nhóm</span>
-            <Button
-              type="primary"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={onAddMember}
-            />
-          </div>
-        }
-        className="m-4 shadow-sm"
-      >
-        <List
-          size="small"
-          dataSource={members}
-          locale={{ emptyText: "Chưa có thành viên" }}
-          renderItem={(member: Member) => (
-            <List.Item
-              actions={[
-                <Button
-                  key="edit"
-                  type="link"
-                  size="small"
-                  onClick={() => onEditMember(member)}
-                >
-                  Sửa
-                </Button>,
-                <Button
-                  key="delete"
-                  type="link"
-                  danger
-                  size="small"
-                  onClick={() => onDeleteMember(member._id)}
-                >
-                  Xóa
-                </Button>,
-              ]}
-            >
-              <Space>
-                <Avatar size="small" icon={<UserOutlined />} />
-                <div>
-                  <div className="font-medium">{member.name}</div>
-                  <div className="text-xs text-gray-500">{member.email}</div>
-                </div>
-                {member.status && (
-                  <Tag color={member.status === "Active" ? "green" : "volcano"}>
-                    {member.status}
-                  </Tag>
-                )}
-              </Space>
-            </List.Item>
-          )}
-        />
-      </Card> */}
 
       {/* Split Bill Section */}
       <Card

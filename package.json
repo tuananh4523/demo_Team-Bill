@@ -9,10 +9,12 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@fullcalendar/bootstrap": "^6.1.19",
     "@fullcalendar/core": "^6.1.19",
     "@fullcalendar/daygrid": "^6.1.19",
     "@fullcalendar/google-calendar": "^6.1.19",
     "@fullcalendar/interaction": "^6.1.19",
+    "@fullcalendar/list": "^6.1.19",
     "@fullcalendar/react": "^6.1.19",
     "@fullcalendar/timegrid": "^6.1.19",
     "@radix-ui/react-slot": "^1.2.3",
@@ -36,6 +38,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/fullcalendar": "^3.8.0",
     "@types/node": "^20",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19",

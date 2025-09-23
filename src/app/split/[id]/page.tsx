@@ -3,42 +3,30 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import axios from "axios";
-import {
-  Input,
-  Button,
-  Card,
-  Table,
-  Tag,
-  Space,
-  message,
-  Modal,
-  Form,
-  DatePicker,
-  Select,
-  Spin,
-  Row,
-  Col,
-} from "antd";
+import { Card, Spin, message, List, DatePicker, Select, Space } from "antd";
 import dayjs, { Dayjs } from "dayjs";
+import isBetween from "dayjs/plugin/isBetween";
 import "dayjs/locale/vi";
 
 import Topbar from "@/components/Topbar";
 import AuthModal, { User } from "@/app/login/AuthModal";
 import EventGroup from "@/app/split/event_group";
 
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import timeGridPlugin from "@fullcalendar/timegrid";
-import interactionPlugin from "@fullcalendar/interaction";
-import viLocale from "@fullcalendar/core/locales/vi";
+dayjs.extend(isBetween);
+const { RangePicker } = DatePicker;
 
 // ========== Types ==========
+export enum MemberStatus {
+  Active = "Active",
+  Inactive = "Inactive",
+}
+
 export type Member = {
   _id: string;
   name: string;
   role: string;
   email: string;
-  status: string;
+  status: MemberStatus;
 };
 
 export type Group = {
@@ -47,45 +35,33 @@ export type Group = {
   members: Member[];
 };
 
-export type EventApiResponse = {
-  _id: string;
-  teamId: string;
-  members: { name: string; paid: number }[];
-  total: number;
-  date: string;
-  title?: string;
-  color?: string;
-};
-
 export type CalendarEvent = {
   id: string;
   title: string;
   start: string;
   teamId: string;
   color: string;
+  total?: number;
+  category?: string;
 };
 
 const API_BASE = "http://localhost:8080/api";
 
-export default function BillSplitPage() {
-  const { id } = useParams<{ id: string }>(); // lấy id nhóm từ URL
+export default function SplitPage() {
+  const { id } = useParams<{ id: string }>();
 
   const [group, setGroup] = useState<Group | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<CalendarEvent[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<EventApiResponse | null>(null);
-
   const [loading, setLoading] = useState(false);
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<EventApiResponse | null>(null);
 
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
-  const [form] = Form.useForm();
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
-  // ========== Load Group by ID ==========
+  // ========== Load Group ==========
   useEffect(() => {
     const fetchGroup = async () => {
       setLoading(true);
@@ -101,247 +77,187 @@ export default function BillSplitPage() {
     if (id) fetchGroup();
   }, [id]);
 
-  // ========== Load Events ==========
+  // ========== Fake Events ==========
   useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const res = await axios.get<EventApiResponse[]>(`${API_BASE}/splits`);
-        const mapped: CalendarEvent[] = res.data.map((ev, i) => ({
-          id: ev._id,
-          title: ev.title || `${ev.total?.toLocaleString()} VNĐ`,
-          start: ev.date,
-          teamId: ev.teamId,
-          color: ev.color || ["#FF9AA2", "#B5EAD7", "#AEC6CF"][i % 3],
-        }));
-        setEvents(mapped);
-        // chỉ lọc sự kiện của group đang mở
-        if (id) {
-          setFilteredEvents(mapped.filter((ev) => ev.teamId === id));
-        }
-      } catch {
-        message.error("Lỗi load sự kiện");
-      }
-    };
-    fetchEvents();
+    const fake: CalendarEvent[] = [
+      {
+        id: "1",
+        title: "Cơm trưa",
+        start: "2025-08-22T12:00:00",
+        teamId: String(id),
+        color: "#FF9AA2",
+        total: 32000,
+        category: "Ăn uống",
+      },
+      {
+        id: "2",
+        title: "Siêu thị",
+        start: "2025-08-22T18:00:00",
+        teamId: String(id),
+        color: "#B5EAD7",
+        total: 3000,
+        category: "Siêu thị",
+      },
+      {
+        id: "3",
+        title: "Cafe sáng",
+        start: "2025-08-22T09:00:00",
+        teamId: String(id),
+        color: "#AEC6CF",
+        total: 25000,
+        category: "Cafe",
+      },
+      {
+        id: "4",
+        title: "Ăn lẩu",
+        start: "2025-08-23T19:00:00",
+        teamId: String(id),
+        color: "#FFB347",
+        total: 250000,
+        category: "Ăn uống",
+      },
+    ];
+    setEvents(fake);
+    setFilteredEvents(fake);
   }, [id]);
 
-  // ========== Lưu sự kiện ==========
-  const handleSaveEvent = async () => {
-    if (!group) return;
-    try {
-      const values = await form.validateFields();
+  // ========== Apply Filters ==========
+  useEffect(() => {
+    let filtered = [...events];
 
-      const payers = values.payers || [];
-      const members = group.members.map((m) => {
-        const paid =
-          payers.find((p: { memberId: string; amount: number }) => p.memberId === m._id)?.amount ||
-          0;
-        return { name: m.name, paid };
-      });
-
-      const payload = {
-        teamId: group._id,
-        total: Number(values.total),
-        date: (values.date as Dayjs).format("YYYY-MM-DD"),
-        members,
-      };
-
-      if (editingEvent) {
-        await axios.put(`${API_BASE}/splits/${editingEvent._id}`, payload);
-        message.success("Cập nhật sự kiện thành công");
-      } else {
-        await axios.post(`${API_BASE}/splits`, payload);
-        message.success("Thêm sự kiện thành công");
-      }
-
-      setIsModalOpen(false);
-      setEditingEvent(null);
-      form.resetFields();
-    } catch (err) {
-      console.error(err);
-      message.error("Lỗi khi lưu sự kiện");
+    if (dateRange) {
+      const [start, end] = dateRange;
+      filtered = filtered.filter((ev) =>
+        dayjs(ev.start).isBetween(start, end, "day", "[]")
+      );
     }
-  };
 
-  // ========== Tính toán chia tiền ==========
-  const getSplitData = () => {
-    if (!group || !selectedEvent) return [];
-    const perPerson =
-      group.members.length > 0 ? (selectedEvent.total ?? 0) / group.members.length : 0;
+    if (categoryFilter) {
+      filtered = filtered.filter((ev) => ev.category === categoryFilter);
+    }
 
-    return group.members.map((m) => {
-      const paid = selectedEvent.members.find((mm) => mm.name === m.name)?.paid || 0;
-      return {
-        name: m.name,
-        paid,
-        mustPay: perPerson,
-        balance: paid - perPerson,
-      };
-    });
-  };
+    setFilteredEvents(filtered);
+  }, [dateRange, categoryFilter, events]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 font-sans text-gray-800">
       <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
 
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-4">
         <Spin spinning={loading}>
-          <Row gutter={16}>
-            {/* Bên trái: Calendar */}
-            <Col xs={24} lg={18}>
-              <Card title={`Lịch sự kiện - ${group?.name || ""}`} className="mb-6 w-full relative">
-                <FullCalendar
-                  locale={viLocale}
-                  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                  initialView="timeGridWeek"
-                  headerToolbar={{
-                    left: "prev,next today",
-                    center: "title",
-                    right: "dayGridMonth,timeGridWeek,timeGridDay",
-                  }}
-                  events={filteredEvents}
-                  height="auto"
-                  selectable
-                  editable
-                  eventClick={(info) => {
-                    message.info(`Sự kiện: ${info.event.title}`);
-                  }}
-                  dateClick={(info) => {
-                    setIsModalOpen(true);
-                    form.setFieldsValue({ date: dayjs(info.date) });
-                  }}
-                />
-
-                <Button
-                  type="primary"
-                  shape="circle"
-                  size="large"
-                  className="!absolute bottom-4 right-4 shadow-lg"
-                  onClick={() => setIsModalOpen(true)}
-                >
-                  +
-                </Button>
-              </Card>
-
-              {group && selectedEvent && (
-                <Card title="Bảng chia hoá đơn" size="small" className="mb-6">
-                  <Table
-                    size="small"
-                    rowKey="name"
-                    dataSource={getSplitData()}
-                    pagination={false}
-                    columns={[
-                      { title: "Tên", dataIndex: "name" },
-                      { title: "Đã trả", dataIndex: "paid" },
-                      { title: "Phải trả", dataIndex: "mustPay" },
-                      {
-                        title: "Cân bằng",
-                        dataIndex: "balance",
-                        render: (val: number) =>
-                          val < 0 ? (
-                            <Tag color="red">{val.toLocaleString()}</Tag>
-                          ) : (
-                            <Tag color="green">{val.toLocaleString()}</Tag>
-                          ),
-                      },
-                    ]}
-                  />
-                </Card>
-              )}
-            </Col>
-
-            {/* Bên phải: Quản lý nhóm & sự kiện */}
-            <Col xs={24} lg={6}>
+          {/* Layout chính: 2 cột sát nhau, khoảng cách đẹp */}
+          <div className="flex gap-4 items-start">
+            {/* Sidebar trái cố định */}
+            <div className="w-[320px]">
               <EventGroup
-                friends={group?.members.map((m) => m.name) || []}
+                members={group?.members || []}
+                events={filteredEvents}
                 selectedDate={dayjs()}
-                onDateChange={() => {}}
+                onDateChange={() =>
+                  message.info("Chọn ngày trong mini calendar")
+                }
+                onAddGroup={() => message.info("Tạo nhóm mới")}
+                onAddMember={() => message.info("Thêm thành viên")}
+                onEditMember={(m) => message.info(`Sửa ${m.name}`)}
+                onDeleteMember={(id) => message.info(`Xoá ${id}`)}
               />
-            </Col>
-          </Row>
+            </div>
+
+            {/* Nội dung chính chiếm phần còn lại */}
+            <div className="flex-1">
+              <Card
+                title="Danh sách chi tiêu"
+                className="shadow-sm"
+                extra={
+                  <Space wrap>
+                    <RangePicker
+                      defaultValue={[
+                        dayjs().startOf("month"),
+                        dayjs().endOf("month"),
+                      ]}
+                      format="DD/MM/YYYY"
+                      onChange={(dates) => {
+                        if (!dates) return setDateRange(null);
+                        const [start, end] = dates as [Dayjs, Dayjs];
+                        setDateRange([start, end]);
+                      }}
+                    />
+                    <Select
+                      placeholder="Danh mục"
+                      allowClear
+                      style={{ width: 150 }}
+                      onChange={(value) => setCategoryFilter(value || null)}
+                      options={[
+                        { value: "Ăn uống", label: "Ăn uống" },
+                        { value: "Siêu thị", label: "Siêu thị" },
+                        { value: "Cafe", label: "Cafe" },
+                      ]}
+                    />
+                  </Space>
+                }
+              >
+                {Object.entries(
+                  filteredEvents
+                    .sort(
+                      (a, b) =>
+                        dayjs(a.start).valueOf() - dayjs(b.start).valueOf()
+                    )
+                    .reduce((acc, ev) => {
+                      const day = dayjs(ev.start).format("YYYY-MM-DD");
+                      if (!acc[day]) acc[day] = [];
+                      acc[day].push(ev);
+                      return acc;
+                    }, {} as Record<string, CalendarEvent[]>)
+                ).map(([day, dayEvents]) => {
+                  const totalDay = dayEvents.reduce(
+                    (sum, ev) => sum + (ev.total || 0),
+                    0
+                  );
+
+                  return (
+                    <div key={day} className="mb-6">
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-semibold text-base text-gray-700">
+                          {dayjs(day).format("dddd, DD/MM/YYYY")}
+                        </h3>
+                        <span className="text-sm text-gray-500">
+                          Tổng: {totalDay.toLocaleString()} VNĐ
+                        </span>
+                      </div>
+
+                      <List
+                        bordered
+                        dataSource={dayEvents}
+                        renderItem={(ev) => (
+                          <List.Item>
+                            <div className="flex justify-between w-full">
+                              <span>
+                                {ev.title}{" "}
+                                <span className="text-gray-400 text-xs">
+                                  ({ev.category || "Chung"})
+                                </span>
+                              </span>
+                              <span className="text-gray-600">
+                                {ev.total?.toLocaleString() || 0} VNĐ
+                              </span>
+                            </div>
+                          </List.Item>
+                        )}
+                      />
+                    </div>
+                  );
+                })}
+              </Card>
+            </div>
+          </div>
         </Spin>
       </div>
 
-      {/* Modal thêm/sửa sự kiện */}
-      <Modal
-        title={editingEvent ? "Sửa sự kiện" : "Thêm sự kiện"}
-        open={isModalOpen}
-        onCancel={() => setIsModalOpen(false)}
-        onOk={handleSaveEvent}
-        okText="Lưu"
-        cancelText="Huỷ"
-      >
-        <Form layout="vertical" form={form}>
-          <Form.Item
-            name="total"
-            label="Tổng số tiền"
-            rules={[{ required: true, message: "Nhập tổng số tiền" }]}
-          >
-            <Input type="number" placeholder="Nhập số tiền (VNĐ)" />
-          </Form.Item>
-
-          <Form.Item
-            name="date"
-            label="Ngày"
-            rules={[{ required: true, message: "Chọn ngày" }]}
-          >
-            <DatePicker className="w-full" />
-          </Form.Item>
-
-          <Form.List name="payers">
-            {(fields, { add, remove }) => (
-              <div>
-                <label className="block font-medium mb-2">Người trả</label>
-                {fields.map(({ key, name, ...restField }) => (
-                  <Space key={key} align="baseline" className="mb-3 flex w-full justify-between">
-                    <Form.Item
-                      {...restField}
-                      name={[name, "memberId"]}
-                      className="flex-1"
-                      rules={[{ required: true, message: "Chọn thành viên" }]}
-                    >
-                      <Select placeholder="Chọn người trả">
-                        {group?.members.map((m) => (
-                          <Select.Option key={m._id} value={m._id}>
-                            {m.name}
-                          </Select.Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
-
-                    <Form.Item
-                      {...restField}
-                      name={[name, "amount"]}
-                      className="w-40"
-                      rules={[{ required: true, message: "Nhập số tiền" }]}
-                    >
-                      <Input type="number" placeholder="Số tiền" />
-                    </Form.Item>
-
-                    <Button
-                      type="text"
-                      danger
-                      onClick={() => remove(name)}
-                      style={{ padding: "0 8px" }}
-                    >
-                      Xóa
-                    </Button>
-                  </Space>
-                ))}
-
-                <Button type="dashed" onClick={() => add()} block style={{ marginTop: 8 }}>
-                  Thêm người trả
-                </Button>
-              </div>
-            )}
-          </Form.List>
-        </Form>
-      </Modal>
-
+      {/* Modal đăng nhập */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
-        onLoginSuccess={(u) => setUser(u)}
+        onLoginSuccess={(u: User) => setUser(u)}
       />
     </div>
   );

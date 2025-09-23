@@ -9,15 +9,16 @@ import {
   Button,
   Table,
   Space,
-  Input,
-  Select,
-  Form,
   Avatar,
   Tag,
+  Form,
+  Input,
 } from "antd";
 import { useRouter } from "next/navigation";
+import { SettingOutlined, PlusOutlined } from "@ant-design/icons";
 import Topbar from "@/components/Topbar";
 import AuthModal, { User } from "@/app/login/AuthModal";
+import MemberModal from "@/components/Modals/MemberModal";
 
 export enum MemberStatus {
   Active = "Active",
@@ -26,11 +27,11 @@ export enum MemberStatus {
 
 export type Member = {
   _id: string;
-  teamId: string;
   name: string;
   role: string;
   email: string;
   status: MemberStatus;
+  teamId: string;
 };
 
 export type Group = {
@@ -54,6 +55,9 @@ export default function TeamMembersPage() {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
   const [form] = Form.useForm();
+  const [groupForm] = Form.useForm(); // form thêm nhóm
+  const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
+
   const router = useRouter();
 
   // ================= API =================
@@ -72,6 +76,20 @@ export default function TeamMembersPage() {
   useEffect(() => {
     loadGroupsWithMembers();
   }, []);
+
+  // ================= CRUD Group =================
+  const handleAddGroup = async () => {
+    try {
+      const values = await groupForm.validateFields();
+      await axios.post(`${API_URL}/teams`, values);
+      toast.success("Tạo nhóm mới thành công!");
+      setIsAddGroupOpen(false);
+      groupForm.resetFields();
+      loadGroupsWithMembers();
+    } catch {
+      toast.error("Lỗi khi tạo nhóm");
+    }
+  };
 
   // ================= CRUD Member =================
   const handleSaveMember = async () => {
@@ -106,16 +124,15 @@ export default function TeamMembersPage() {
   };
 
   // ================= Helper: slugify group name =================
- const slugify = (str: string) =>
-  str
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // bỏ dấu
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
-
+  const slugify = (str: string) =>
+    str
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .trim();
 
   // ================= Columns Table =================
   const memberColumns = [
@@ -175,50 +192,82 @@ export default function TeamMembersPage() {
       <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
 
       <main className="p-6">
-        <Card title="Nhóm" className="w-full">
+        <Card
+          title="Nhóm"
+          className="w-full"
+          extra={
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setIsAddGroupOpen(true)}
+            >
+              Thêm nhóm
+            </Button>
+          }
+        >
           {loading ? (
             <p className="text-center text-gray-500">Đang tải dữ liệu...</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {groups.map((group) => (
-                <div
-                  key={group._id}
-                  onClick={() => setOpenGroup(group)}
-                  className="bg-white rounded-xl shadow p-5 hover:shadow-md transition cursor-pointer"
-                >
-                  <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-lg font-semibold">{group.name}</h2>
-                    <span
-                      className={`px-2 py-1 text-xs rounded-full ${
-                        group.members.some(
-                          (m) => m.status === MemberStatus.Active
-                        )
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
+              {groups.map((group) => {
+                const groupSlug = slugify(group.name);
+                return (
+                  <div
+                    key={group._id}
+                    className="bg-white rounded-xl shadow p-5 hover:shadow-md transition relative"
+                  >
+                    {/* Nội dung click → sang split page */}
+                    <div
+                      onClick={() => router.push(`/split/${groupSlug}`)}
+                      className="cursor-pointer"
                     >
-                      {group.members.some(
-                        (m) => m.status === MemberStatus.Active
-                      )
-                        ? "Active"
-                        : "Inactive"}
-                    </span>
-                  </div>
-                  <div className="flex -space-x-2">
-                    {group.members.slice(0, 4).map((m) => (
-                      <Avatar
-                        key={m._id}
-                        src={`https://i.pravatar.cc/32?u=${m._id}`}
-                      />
-                    ))}
-                    {group.members.length > 4 && (
-                      <div className="w-8 h-8 flex items-center justify-center bg-gray-200 text-xs rounded-full border-2 border-white">
-                        +{group.members.length - 4}
+                      <div className="flex justify-between items-center mb-3">
+                        <h2 className="text-lg font-semibold">{group.name}</h2>
+                        <span
+                          className={`px-2 py-1 text-xs rounded-full ${
+                            group.members.some(
+                              (m) => m.status === MemberStatus.Active
+                            )
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          {group.members.some(
+                            (m) => m.status === MemberStatus.Active
+                          )
+                            ? "Active"
+                            : "Inactive"}
+                        </span>
                       </div>
-                    )}
+                      <div className="flex -space-x-2">
+                        {group.members.slice(0, 4).map((m) => (
+                          <Avatar
+                            key={m._id}
+                            src={`https://i.pravatar.cc/32?u=${m._id}`}
+                          />
+                        ))}
+                        {group.members.length > 4 && (
+                          <div className="w-8 h-8 flex items-center justify-center bg-gray-200 text-xs rounded-full border-2 border-white">
+                            +{group.members.length - 4}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bánh răng mở chi tiết nhóm */}
+                    <Button
+                      type="text"
+                      shape="circle"
+                      icon={<SettingOutlined />}
+                      className="absolute top-3 right-3"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenGroup(group);
+                      }}
+                    />
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>
@@ -250,16 +299,6 @@ export default function TeamMembersPage() {
           >
             + Add Member
           </Button>
-          <Button
-            onClick={() => {
-              if (openGroup) {
-                const groupSlug = slugify(openGroup.name);
-                router.push(`/split/${groupSlug}`); // 👉 dùng slug tên nhóm
-              }
-            }}
-          >
-            Chia hóa đơn
-          </Button>
         </div>
 
         <Table
@@ -271,52 +310,33 @@ export default function TeamMembersPage() {
       </Modal>
 
       {/* Add/Edit Member Modal */}
-      <Modal
-        title={editingMember ? "Edit Member" : "Add Member"}
+      <MemberModal
         open={isMemberModalOpen}
         onCancel={() => setIsMemberModalOpen(false)}
-        onOk={handleSaveMember}
-        okText="Save"
-        cancelText="Cancel"
+        onSave={handleSaveMember}
+        form={form}
+        editingMember={editingMember}
+      />
+
+      {/* Add Group Modal */}
+      <Modal
+        title="Tạo nhóm mới"
+        open={isAddGroupOpen}
+        onCancel={() => setIsAddGroupOpen(false)}
+        onOk={handleAddGroup}
+        okText="Tạo"
+        cancelText="Hủy"
       >
-        <Form layout="vertical" form={form}>
+        <Form form={groupForm} layout="vertical">
           <Form.Item
+            label="Tên nhóm"
             name="name"
-            label="Tên"
-            rules={[{ required: true, message: "Nhập tên" }]}
+            rules={[{ required: true, message: "Vui lòng nhập tên nhóm" }]}
           >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="email"
-            label="Email"
-            rules={[
-              { required: true, type: "email", message: "Email không hợp lệ" },
-            ]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item name="role" label="Vai trò">
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="status"
-            label="Trạng thái"
-            initialValue={MemberStatus.Active}
-          >
-            <Select>
-              <Select.Option value={MemberStatus.Active}>
-                Hoạt động
-              </Select.Option>
-              <Select.Option value={MemberStatus.Inactive}>
-                Ngưng hoạt động
-              </Select.Option>
-            </Select>
+            <Input placeholder="Nhập tên nhóm" />
           </Form.Item>
         </Form>
       </Modal>
     </div>
   );
 }
-
-

@@ -166,39 +166,53 @@ export default function CategoriesPage() {
         <div className="flex justify-between items-center mb-6">
           {/* Nút thêm bên trái */}
           <button
-          className="rounded-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium shadow"
-          onClick={()=> openModal()}
-        >
-          <PlusOutlined className="mr-1" /> Thêm danh mục
-        </button>
+            className="rounded-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium shadow"
+            onClick={() => openModal()}
+          >
+            <PlusOutlined className="mr-1" /> Thêm danh mục
+          </button>
 
           {/* Toggle + Sort bên phải */}
           <div className="flex items-center gap-3">
-            <div className="flex border border-gray-300 rounded-md overflow-hidden h-10">
+            {/* Toggle view */}
+            <div className="flex border rounded-full overflow-hidden bg-white">
               <button
-                className={`flex items-center justify-center w-10 ${
-                  viewMode === "grid" ? "bg-blue-50 text-blue-600" : "bg-white text-gray-600"
+                className={`flex items-center justify-center w-12 h-10 text-lg ${
+                  viewMode === "grid"
+                    ? "bg-blue-50 text-blue-600 font-semibold"
+                    : "text-gray-600"
                 }`}
                 onClick={() => setViewMode("grid")}
               >
-                <CheckOutlined className={`text-xs ${viewMode !== "grid" ? "opacity-0" : ""}`} />
-                <span className="ml-1">▦</span>
+                <CheckOutlined
+                  className={`mr-1 text-xs transition ${
+                    viewMode !== "grid" ? "opacity-0" : "opacity-100"
+                  }`}
+                />
+                ▦
               </button>
               <button
-                className={`flex items-center justify-center w-10 ${
-                  viewMode === "list" ? "bg-blue-50 text-blue-600" : "bg-white text-gray-600"
+                className={`flex items-center justify-center w-12 h-10 text-lg ${
+                  viewMode === "list"
+                    ? "bg-blue-50 text-blue-600 font-semibold"
+                    : "text-gray-600"
                 }`}
                 onClick={() => setViewMode("list")}
               >
-                <CheckOutlined className={`text-xs ${viewMode !== "list" ? "opacity-0" : ""}`} />
-                <span className="ml-1">≡</span>
+                <CheckOutlined
+                  className={`mr-1 text-xs transition ${
+                    viewMode !== "list" ? "opacity-0" : "opacity-100"
+                  }`}
+                />
+                ≡
               </button>
             </div>
 
+            {/* Sort dropdown */}
             <Dropdown
               menu={{ items: sortMenu, onClick: (info) => setSortKey(info.key) }}
             >
-              <button className="h-10 rounded-lg px-3 bg-gray-100 hover:bg-gray-200 flex items-center gap-1 text-sm">
+              <button className="h-10 px-4 rounded-full bg-white border hover:bg-gray-50 flex items-center gap-1 text-sm">
                 {sortMenu.find((i) => i.key === sortKey)?.label} <DownOutlined />
               </button>
             </Dropdown>

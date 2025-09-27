@@ -21,8 +21,10 @@ import {
   PlusOutlined,
   CheckOutlined,
   DownOutlined,
-  DeleteOutlined,
   EditOutlined,
+  DeleteOutlined,
+  AppstoreOutlined,
+  UnorderedListOutlined,
 } from "@ant-design/icons";
 import AuthModal, { User } from "@/app/login/AuthModal";
 import MemberModal from "@/components/Modals/MemberModal";
@@ -66,8 +68,11 @@ export default function TeamMembersPage() {
   const [form] = Form.useForm();
   const [groupForm] = Form.useForm();
   const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
+  const [isEditGroupOpen, setIsEditGroupOpen] = useState(false);
 
-  const [deleteGroup, setDeleteGroup] = useState<Group | null>(null);
+  // Xác nhận xóa nhóm
+  const [isDeleteGroupOpen, setIsDeleteGroupOpen] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
 
   const router = useRouter();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -104,15 +109,42 @@ export default function TeamMembersPage() {
     }
   };
 
-  const handleDeleteGroup = async () => {
-    if (!deleteGroup) return;
+  const handleUpdateGroup = async () => {
+    if (!openGroup) return;
     try {
-      await axios.delete(`${API_URL}/teams/${deleteGroup._id}`);
-      toast.success("Xóa nhóm thành công!");
-      setDeleteGroup(null);
-      loadGroupsWithMembers();
+      const values = await groupForm.validateFields();
+      await axios.put(`${API_URL}/teams/${openGroup._id}`, values);
+
+      setGroups((prev) =>
+        prev.map((g) =>
+          g._id === openGroup._id ? { ...g, name: values.name } : g
+        )
+      );
+      setOpenGroup({ ...openGroup, name: values.name });
+
+      toast.success("Cập nhật nhóm thành công!");
+      setIsEditGroupOpen(false);
+      groupForm.resetFields();
     } catch {
-      toast.error("Lỗi khi xóa nhóm");
+      toast.error("Lỗi khi cập nhật nhóm");
+    }
+  };
+
+  const handleDeleteGroupConfirm = async () => {
+    if (!openGroup) return;
+    if (deleteConfirmName !== openGroup.name) {
+      toast.error("Tên nhóm không khớp, không thể xoá!");
+      return;
+    }
+    try {
+      await axios.delete(`${API_URL}/teams/${openGroup._id}`);
+      toast.success("Xoá nhóm thành công!");
+      setGroups((prev) => prev.filter((g) => g._id !== openGroup._id));
+      setOpenGroup(null);
+      setIsDeleteGroupOpen(false);
+      setDeleteConfirmName("");
+    } catch {
+      toast.error("Lỗi khi xoá nhóm");
     }
   };
 
@@ -138,6 +170,7 @@ export default function TeamMembersPage() {
   };
 
   const handleDeleteMember = async (id: string) => {
+    if (!confirm("Bạn có chắc muốn xóa thành viên này?")) return;
     try {
       await axios.delete(`${API_URL}/members/${id}`);
       toast.success("Xóa thành viên thành công!");
@@ -168,11 +201,11 @@ export default function TeamMembersPage() {
       dataIndex: "status",
       render: (val: MemberStatus) =>
         val === MemberStatus.Active ? (
-          <Tag className="bg-green-100 text-green-700 border-none px-2 py-1 rounded-full">
+          <Tag className="bg-green-100 text-green-700 border-none px-3 py-1 rounded-full">
             Hoạt động
           </Tag>
         ) : (
-          <Tag className="bg-red-100 text-red-600 border-none px-2 py-1 rounded-full">
+          <Tag className="bg-red-100 text-red-600 border-none px-3 py-1 rounded-full">
             Ngưng hoạt động
           </Tag>
         ),
@@ -210,18 +243,19 @@ export default function TeamMembersPage() {
   // ================= Render =================
   return (
     <div className="min-h-screen font-sans bg-gray-50 text-gray-800 p-6">
-      {/* Tiêu đề trang */}
       <h1 className="text-2xl font-bold text-gray-800 mb-2">Quản lý nhóm</h1>
       <p className="text-gray-500 mb-6">Xem và quản lý các nhóm của bạn</p>
 
       {/* Toolbar */}
       <div className="flex justify-between items-center mb-6">
-        <button
-          className="rounded-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium shadow"
+        <Button
+          type="primary"
+          shape="round"
+          icon={<PlusOutlined />}
           onClick={() => setIsAddGroupOpen(true)}
         >
-          <PlusOutlined className="mr-1" /> Thêm nhóm mới
-        </button>
+          Thêm nhóm mới
+        </Button>
 
         <div className="flex items-center gap-2">
           {/* View toggle */}
@@ -235,7 +269,7 @@ export default function TeamMembersPage() {
               onClick={() => setViewMode("grid")}
             >
               <CheckOutlined className={`text-xs ${viewMode !== "grid" ? "opacity-0" : ""}`} />
-              <span className="text-base">▦</span>
+              <AppstoreOutlined />
             </button>
             <button
               className={`flex items-center gap-1 px-3 py-1.5 text-sm ${
@@ -246,17 +280,17 @@ export default function TeamMembersPage() {
               onClick={() => setViewMode("list")}
             >
               <CheckOutlined className={`text-xs ${viewMode !== "list" ? "opacity-0" : ""}`} />
-              <span className="text-base">≡</span>
+              <UnorderedListOutlined />
             </button>
           </div>
 
-          {/* Dropdown sắp xếp */}
+          {/* Dropdown sort */}
           <Dropdown
             menu={{ items: sortMenu, onClick: (info) => setSortKey(info.key) }}
           >
-            <button className="rounded-lg px-3 py-2 bg-gray-100 hover:bg-gray-200">
+            <Button shape="round">
               {sortMenu.find((i) => i?.key === sortKey)?.label} <DownOutlined />
-            </button>
+            </Button>
           </Dropdown>
         </div>
       </div>
@@ -288,54 +322,21 @@ export default function TeamMembersPage() {
                 className={`border rounded-xl p-5 shadow-sm hover:shadow-lg transition cursor-pointer relative ${bgClass}`}
                 onClick={() => router.push(`/split/${group._id}`)}
               >
-                {/* Menu Setting */}
-                <Dropdown
-                  trigger={["click"]}
-                  menu={{
-                    items: [
-                      {
-                        key: "edit",
-                        label: (
-                          <span
-                            className="flex items-center gap-2"
-                            onClick={() => {
-                              setIsAddGroupOpen(true);
-                              groupForm.setFieldsValue(group);
-                            }}
-                          >
-                            <EditOutlined /> Chỉnh sửa nhóm
-                          </span>
-                        ),
-                      },
-                      {
-                        key: "delete",
-                        label: (
-                          <span
-                            className="flex items-center gap-2 text-red-500"
-                            onClick={() => setDeleteGroup(group)}
-                          >
-                            <DeleteOutlined /> Xóa nhóm
-                          </span>
-                        ),
-                      },
-                    ],
+                <button
+                  className="absolute top-3 right-3 text-gray-500 hover:text-black"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenGroup(group);
                   }}
                 >
-                  <button
-                    className="absolute top-3 right-3 text-gray-500 hover:text-black"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <SettingOutlined />
-                  </button>
-                </Dropdown>
+                  <SettingOutlined />
+                </button>
 
-                {/* Tên nhóm */}
                 <h2 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
                   <span className={`w-3 h-3 rounded-full ${dotColor}`} />
                   {group.name}
                 </h2>
 
-                {/* Avatars */}
                 <div className="flex -space-x-2 mb-3">
                   {group.members.slice(0, 4).map((m) => (
                     <Avatar
@@ -351,7 +352,6 @@ export default function TeamMembersPage() {
                   )}
                 </div>
 
-                {/* Footer */}
                 <div className="flex justify-between items-center text-sm text-gray-600">
                   <span
                     className={`px-2 py-1 text-xs rounded-full ${
@@ -402,17 +402,42 @@ export default function TeamMembersPage() {
         width={800}
       >
         <div className="mb-4 flex justify-between">
+          <div className="flex gap-2">
+            <Button
+              type="primary"
+              shape="round"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                form.resetFields();
+                setEditingMember(null);
+                setIsMemberModalOpen(true);
+              }}
+            >
+              Thêm thành viên
+            </Button>
+
+            <Button
+              shape="round"
+              icon={<EditOutlined />}
+              onClick={() => {
+                groupForm.setFieldsValue({ name: openGroup?.name });
+                setIsEditGroupOpen(true);
+              }}
+            >
+              Sửa tên nhóm
+            </Button>
+          </div>
+
           <Button
-            type="primary"
-            onClick={() => {
-              form.resetFields();
-              setEditingMember(null);
-              setIsMemberModalOpen(true);
-            }}
+            danger
+            shape="round"
+            icon={<DeleteOutlined />}
+            onClick={() => setIsDeleteGroupOpen(true)}
           >
-            + Thêm thành viên
+            Xóa nhóm
           </Button>
         </div>
+
         <Table
           rowKey="_id"
           dataSource={openGroup?.members || []}
@@ -450,17 +475,47 @@ export default function TeamMembersPage() {
         </Form>
       </Modal>
 
-      {/* Delete Group Confirm */}
+      {/* Edit Group Modal */}
       <Modal
-        open={!!deleteGroup}
-        onCancel={() => setDeleteGroup(null)}
-        onOk={handleDeleteGroup}
-        okText="Xóa"
+        title="Sửa tên nhóm"
+        open={isEditGroupOpen}
+        onCancel={() => setIsEditGroupOpen(false)}
+        onOk={handleUpdateGroup}
+        okText="Lưu"
         cancelText="Hủy"
-        okButtonProps={{ danger: true, icon: <DeleteOutlined /> }}
-        title="Xóa nhóm"
       >
-        <p>Bạn có chắc chắn muốn xóa nhóm <b>{deleteGroup?.name}</b> không?</p>
+        <Form form={groupForm} layout="vertical">
+          <Form.Item
+            label="Tên nhóm"
+            name="name"
+            rules={[{ required: true, message: "Vui lòng nhập tên nhóm" }]}
+          >
+            <Input placeholder="Nhập tên nhóm mới" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Delete Group Confirm Modal */}
+      <Modal
+        title="Xác nhận xoá nhóm"
+        open={isDeleteGroupOpen}
+        onCancel={() => {
+          setIsDeleteGroupOpen(false);
+          setDeleteConfirmName("");
+        }}
+        onOk={handleDeleteGroupConfirm}
+        okText="Xóa"
+        okButtonProps={{ danger: true }}
+        cancelText="Hủy"
+      >
+        <p>
+          Nhập tên nhóm <b>{openGroup?.name}</b> để xác nhận xoá:
+        </p>
+        <Input
+          value={deleteConfirmName}
+          onChange={(e) => setDeleteConfirmName(e.target.value)}
+          placeholder="Nhập chính xác tên nhóm"
+        />
       </Modal>
     </div>
   );

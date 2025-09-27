@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import axios from "axios";
 
 export default function Breadcrumb() {
   const pathname = usePathname();
-
-  // Cắt path thành mảng
   const segments = pathname.split("/").filter(Boolean);
 
+  const [groupName, setGroupName] = useState<string | null>(null);
+
   // Map segment sang title đẹp
-  const mapTitle = (segment: string) => {
+  const mapTitle = (segment: string, idx: number) => {
     switch (segment) {
       case "dashboard":
         return "Bảng điều khiển";
@@ -21,9 +23,29 @@ export default function Breadcrumb() {
       case "split":
         return "Chia hóa đơn";
       default:
+        // Nếu là trang split/:id thì thay id bằng tên nhóm
+        if (segments[0] === "split" && idx === 1) {
+          return groupName || segment; // fallback ra id nếu chưa có tên
+        }
         return segment.charAt(0).toUpperCase() + segment.slice(1);
     }
   };
+
+  useEffect(() => {
+    const fetchGroupName = async () => {
+      if (segments[0] === "split" && segments[1]) {
+        try {
+          const res = await axios.get(
+            `http://localhost:8080/api/teams/${segments[1]}`
+          );
+          setGroupName(res.data.name);
+        } catch {
+          setGroupName(null);
+        }
+      }
+    };
+    fetchGroupName();
+  }, [segments]);
 
   return (
     <nav className="text-sm text-gray-600 mb-4">
@@ -40,14 +62,11 @@ export default function Breadcrumb() {
               <span>{">"}</span>
               {idx === segments.length - 1 ? (
                 <span className="font-semibold text-gray-900">
-                  {mapTitle(segment)}
+                  {mapTitle(segment, idx)}
                 </span>
               ) : (
-                <Link
-                  href={href}
-                  className="text-blue-600 hover:underline"
-                >
-                  {mapTitle(segment)}
+                <Link href={href} className="text-blue-600 hover:underline">
+                  {mapTitle(segment, idx)}
                 </Link>
               )}
             </li>

@@ -1,66 +1,9 @@
-// "use client" 
-// import { Geist, Geist_Mono } from "next/font/google"
-// import "./globals.css"
-// import { SettingsProvider, useSettings } from "@/context/Settings"
-// import { ConfigProvider, theme as antdTheme } from "antd"
-// // Import Sidebar
-// import Sidebar from "@/components/sidebar"
-
-// const geistSans = Geist({
-//   variable: "--font-geist-sans",
-//   subsets: ["latin"],
-// })
-
-// const geistMono = Geist_Mono({
-//   variable: "--font-geist-mono",
-//   subsets: ["latin"],
-// })
-
-// // ⚠️ Khi dùng "use client", bạn KHÔNG thể dùng metadata như Server Component
-// // Nếu vẫn muốn có metadata, bạn nên tạo file `app/head.tsx`
-
-// export default function RootLayout({
-//   children,
-// }: {
-//   children: React.ReactNode
-// }) {
-//   const { settings } = useSettings()  // bây giờ dùng được vì layout là Client
-
-//   return (
-//     <html lang="vi">
-//       <body
-//         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-//       >
-//         <SettingsProvider>
-//           <ConfigProvider
-//             theme={{
-//               algorithm:
-//                 settings.theme === "dark"
-//                   ? antdTheme.darkAlgorithm
-//                   : antdTheme.defaultAlgorithm,
-//             }}
-//           >
-//             <div className="flex">
-//               {/* Sidebar luôn hiển thị cố định */}
-//               <Sidebar />
-
-//               {/* Nội dung chính thay đổi khi chuyển trang */}
-//               <main className="flex-1 p-6 bg-gray-50 min-h-screen">
-//                 {children}
-//               </main>
-//             </div>
-//           </ConfigProvider>
-//         </SettingsProvider>
-//       </body>
-//     </html>
-//   )
-// }
-// app/layout.tsx
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Providers from "./providers"; 
+import Providers from "./providers";
 import Sidebar from "@/components/sidebar";
+import Topbar from "@/components/Topbar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -74,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Hệ thống quản lý chi tiêu",
-  description: "Ứng dụng Next.js với sidebar cố định và theme tùy chỉnh",
+  description: "Ứng dụng Next.js với sidebar và topbar cố định",
 };
 
 export default function RootLayout({
@@ -85,21 +28,30 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-100`}
       >
         <Providers>
-          <div className="flex">
-            {/* Sidebar cố định */}
-            <Sidebar />
+          <div className="flex h-screen">
+            {/* Sidebar trái */}
+            <aside className="w-64 bg-white border-r border-gray-200 shadow-sm">
+              <Sidebar />
+            </aside>
 
-            {/* Nội dung chính */}
-            <main className="flex-1 p-6 bg-gray-50 min-h-screen">
-              {children}
-            </main>
+            {/* Phần chính */}
+            <div className="flex flex-col flex-1">
+              {/* Topbar */}
+              <header className="px-6 py-3 bg-white border-b border-gray-200 sticky top-0 z-10">
+                <Topbar />
+              </header>
+
+              {/* Nội dung chính */}
+              <main className="flex-1 overflow-y-auto p-6">
+                {children}
+              </main>
+            </div>
           </div>
         </Providers>
       </body>
     </html>
   );
 }
-

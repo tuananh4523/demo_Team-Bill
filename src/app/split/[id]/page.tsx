@@ -12,20 +12,28 @@ import {
   Select,
   Space,
   Button,
+  Modal,
+  Form,
+  Input,
+  InputNumber,
+  Tag,
+  ConfigProvider,
 } from "antd";
+import viVN from "antd/es/locale/vi_VN";
 import dayjs, { Dayjs } from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
 import "dayjs/locale/vi";
-import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
-import Topbar from "@/components/Topbar";
+import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import AuthModal, { User } from "@/app/login/AuthModal";
 import EventGroup from "@/app/split/event_group";
-import SplitBillModal from "@/components/Modals/SplitBillModal";
+import type { Category } from "@/app/categories/page";
 
+// ================== DayJS Config ==================
+dayjs.locale("vi");
 dayjs.extend(isBetween);
 const { RangePicker } = DatePicker;
 
-// ========== Types ==========
+// ================== Types ==================
 export enum MemberStatus {
   Active = "Active",
   Inactive = "Inactive",
@@ -50,14 +58,122 @@ export type CalendarEvent = {
   title: string;
   start: string;
   teamId: string;
-  color: string;
   total?: number;
-  category?: string;
+  categoryId?: string;
   note?: string;
 };
 
 const API_BASE = "http://localhost:8080/api";
 
+// ================== Expense Modal ==================
+type ExpenseModalProps = {
+  open: boolean;
+  event: CalendarEvent | null;
+  categories: Category[];
+  onClose: () => void;
+  onSave: (event: CalendarEvent) => void;
+};
+
+function ExpenseModal({
+  open,
+  event,
+  categories,
+  onClose,
+  onSave,
+}: ExpenseModalProps) {
+  const [form] = Form.useForm();
+
+  useEffect(() => {
+    if (event) {
+      form.setFieldsValue({
+        ...event,
+        start: dayjs(event.start),
+      });
+    } else {
+      form.resetFields();
+    }
+  }, [event, form]);
+
+  const handleOk = () => {
+    form.validateFields().then((values) => {
+      const newEvent: CalendarEvent = {
+        id: event ? event.id : String(Date.now()),
+        title: values.title,
+        start: values.start.toISOString(),
+        total: values.total,
+        categoryId: values.categoryId,
+        note: values.note,
+        teamId: event ? event.teamId : "temp",
+      };
+      onSave(newEvent);
+    });
+  };
+
+  return (
+    <Modal
+      title={event ? "Sửa chi tiêu" : "Thêm chi tiêu"}
+      open={open}
+      onCancel={onClose}
+      onOk={handleOk}
+      okText="Lưu"
+      cancelText="Hủy"
+      okButtonProps={{
+        className:
+          "rounded-full bg-blue-400 hover:bg-blue-500 border-none px-5 py-2 font-medium shadow text-white",
+      }}
+      cancelButtonProps={{
+        className:
+          "rounded-full border border-gray-300 px-5 py-2 font-medium text-gray-600 hover:bg-gray-100",
+      }}
+    >
+      <Form form={form} layout="vertical">
+        <Form.Item
+          label="Tên chi tiêu"
+          name="title"
+          rules={[{ required: true, message: "Nhập tên chi tiêu" }]}
+        >
+          <Input placeholder="Ví dụ: Cơm trưa" />
+        </Form.Item>
+        <Form.Item
+          label="Ngày giờ"
+          name="start"
+          rules={[{ required: true, message: "Chọn ngày giờ" }]}
+        >
+          <DatePicker
+            showTime
+            style={{ width: "100%" }}
+            format="DD/MM/YYYY HH:mm"
+          />
+        </Form.Item>
+        <Form.Item
+          label="Số tiền (VNĐ)"
+          name="total"
+          rules={[{ required: true, message: "Nhập số tiền" }]}
+        >
+          <InputNumber style={{ width: "100%" }} min={0} step={1000} />
+        </Form.Item>
+        <Form.Item
+          label="Danh mục"
+          name="categoryId"
+          rules={[{ required: true, message: "Chọn danh mục" }]}
+        >
+          <Select
+            options={categories.map((c) => ({
+              value: c.id,
+              label: c.name,
+            }))}
+            placeholder="Chọn danh mục"
+          />
+        </Form.Item>
+        <Form.Item label="Ghi chú" name="note">
+          <Input.TextArea placeholder="Thêm ghi chú" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}
+
+// ================== Main Component ==================
 export default function SplitPage() {
   const { id } = useParams<{ id: string }>();
 
@@ -66,10 +182,20 @@ export default function SplitPage() {
   const [filteredEvents, setFilteredEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [categories] = useState<Category[]>([
+    { id: "1", name: "Ăn uống", color: "blue" },
+    { id: "2", name: "Shopping", color: "red" },
+    { id: "3", name: "Cafe", color: "purple" },
+    { id: "4", name: "Đi lại", color: "green" },
+    { id: "5", name: "Giải trí", color: "gold" },
+    { id: "6", name: "Khác", color: "gray" },
+  ]);
+
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
   const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
 
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -90,51 +216,44 @@ export default function SplitPage() {
     if (id) fetchGroup();
   }, [id]);
 
-  // ========== Fake Events ban đầu ==========
+  // ========== Fake Events (20 sự kiện mẫu) ==========
   useEffect(() => {
     if (!id) return;
     const fake: CalendarEvent[] = [
-      // Ăn uống
       {
         id: "1",
         title: "Cơm trưa",
         start: "2025-09-20T12:00:00",
         teamId: String(id),
-        color: "#3B82F6",
         total: 50000,
-        category: "Ăn uống",
-        note: "Ăn trưa với đồng nghiệp",
+        categoryId: "1",
+        note: "Ăn trưa văn phòng",
       },
       {
         id: "2",
-        title: "Bún chả",
-        start: "2025-09-21T13:00:00",
+        title: "Lẩu nướng",
+        start: "2025-09-21T18:30:00",
         teamId: String(id),
-        color: "#3B82F6",
-        total: 70000,
-        category: "Ăn uống",
-        note: "Ăn ngoài hàng",
+        total: 300000,
+        categoryId: "1",
+        note: "Đi ăn cùng nhóm bạn",
       },
       {
         id: "3",
-        title: "Lẩu",
-        start: "2025-09-23T19:00:00",
+        title: "Bún chả",
+        start: "2025-09-22T13:00:00",
         teamId: String(id),
-        color: "#3B82F6",
-        total: 300000,
-        category: "Ăn uống",
-        note: "Đi ăn cùng nhóm bạn",
+        total: 70000,
+        categoryId: "1",
+        note: "Ăn ngoài hàng",
       },
-
-      // Shopping
       {
         id: "4",
         title: "Mua áo sơ mi",
         start: "2025-09-20T16:00:00",
         teamId: String(id),
-        color: "#EF4444",
         total: 250000,
-        category: "Shopping",
+        categoryId: "2",
         note: "Mua ở trung tâm thương mại",
       },
       {
@@ -142,9 +261,8 @@ export default function SplitPage() {
         title: "Mua giày",
         start: "2025-09-22T15:00:00",
         teamId: String(id),
-        color: "#EF4444",
         total: 800000,
-        category: "Shopping",
+        categoryId: "2",
         note: "Sneaker Adidas",
       },
       {
@@ -152,360 +270,342 @@ export default function SplitPage() {
         title: "Mua sách",
         start: "2025-09-23T10:00:00",
         teamId: String(id),
-        color: "#EF4444",
         total: 150000,
-        category: "Shopping",
+        categoryId: "2",
         note: "Sách kỹ năng sống",
       },
-
-      // Cafe
       {
         id: "7",
-        title: "Cafe sáng",
-        start: "2025-09-21T09:00:00",
+        title: "Mua balo laptop",
+        start: "2025-09-25T17:00:00",
         teamId: String(id),
-        color: "#8B5CF6",
-        total: 45000,
-        category: "Cafe",
-        note: "Uống cafe với bạn",
+        total: 400000,
+        categoryId: "2",
+        note: "Balo để đi học",
       },
       {
         id: "8",
-        title: "Cafe meeting",
-        start: "2025-09-22T11:00:00",
+        title: "Cafe sáng",
+        start: "2025-09-21T09:00:00",
         teamId: String(id),
-        color: "#8B5CF6",
-        total: 60000,
-        category: "Cafe",
-        note: "Họp nhóm ở Highlands",
+        total: 45000,
+        categoryId: "3",
+        note: "Cafe Highland",
       },
       {
         id: "9",
-        title: "Cafe muộn",
-        start: "2025-09-23T21:00:00",
+        title: "Cafe meeting",
+        start: "2025-09-22T11:00:00",
         teamId: String(id),
-        color: "#8B5CF6",
-        total: 50000,
-        category: "Cafe",
-        note: "Uống cà phê tối",
+        total: 60000,
+        categoryId: "3",
+        note: "Họp nhóm ở Starbucks",
       },
-
-      // Đi lại
       {
         id: "10",
-        title: "Xe bus",
-        start: "2025-09-21T08:00:00",
+        title: "Cafe tối",
+        start: "2025-09-23T21:00:00",
         teamId: String(id),
-        color: "#10B981",
-        total: 7000,
-        category: "Đi lại",
-        note: "Vé xe bus đi làm",
+        total: 50000,
+        categoryId: "3",
+        note: "Uống cà phê tối",
       },
       {
         id: "11",
-        title: "Grab",
-        start: "2025-09-22T19:00:00",
+        title: "Xe bus",
+        start: "2025-09-21T08:00:00",
         teamId: String(id),
-        color: "#10B981",
-        total: 120000,
-        category: "Đi lại",
-        note: "Đi Grab về nhà",
+        total: 7000,
+        categoryId: "4",
+        note: "Vé xe bus đi làm",
       },
       {
         id: "12",
+        title: "Grab",
+        start: "2025-09-22T19:00:00",
+        teamId: String(id),
+        total: 120000,
+        categoryId: "4",
+        note: "Đi Grab về nhà",
+      },
+      {
+        id: "13",
         title: "Taxi",
         start: "2025-09-23T23:00:00",
         teamId: String(id),
-        color: "#10B981",
         total: 200000,
-        category: "Đi lại",
+        categoryId: "4",
         note: "Đi taxi khuya",
-      },
-
-      // Giải trí
-      {
-        id: "13",
-        title: "Xem phim",
-        start: "2025-09-22T20:00:00",
-        teamId: String(id),
-        color: "#FACC15",
-        total: 120000,
-        category: "Giải trí",
-        note: "CGV Vincom",
       },
       {
         id: "14",
-        title: "Karaoke",
-        start: "2025-09-23T21:00:00",
+        title: "Xem phim",
+        start: "2025-09-22T20:00:00",
         teamId: String(id),
-        color: "#FACC15",
-        total: 400000,
-        category: "Giải trí",
-        note: "Đi hát với bạn bè",
+        total: 120000,
+        categoryId: "5",
+        note: "CGV Vincom",
       },
       {
         id: "15",
+        title: "Karaoke",
+        start: "2025-09-23T21:00:00",
+        teamId: String(id),
+        total: 400000,
+        categoryId: "5",
+        note: "Đi hát với bạn bè",
+      },
+      {
+        id: "16",
         title: "Chơi game",
         start: "2025-09-24T15:00:00",
         teamId: String(id),
-        color: "#FACC15",
         total: 80000,
-        category: "Giải trí",
+        categoryId: "5",
         note: "Nạp game",
-      },
-
-      // Khác
-      {
-        id: "16",
-        title: "Quà sinh nhật",
-        start: "2025-09-23T19:00:00",
-        teamId: String(id),
-        color: "#6B7280",
-        total: 300000,
-        category: "Khác",
-        note: "Mua quà cho bạn",
       },
       {
         id: "17",
-        title: "Ủng hộ từ thiện",
-        start: "2025-09-24T10:00:00",
+        title: "Quà sinh nhật",
+        start: "2025-09-23T19:00:00",
         teamId: String(id),
-        color: "#6B7280",
-        total: 200000,
-        category: "Khác",
-        note: "Ủng hộ vùng lũ",
+        total: 300000,
+        categoryId: "6",
+        note: "Mua quà cho bạn",
       },
       {
         id: "18",
+        title: "Ủng hộ từ thiện",
+        start: "2025-09-24T10:00:00",
+        teamId: String(id),
+        total: 200000,
+        categoryId: "6",
+        note: "Ủng hộ vùng lũ",
+      },
+      {
+        id: "19",
         title: "Mua cây cảnh",
         start: "2025-09-24T18:00:00",
         teamId: String(id),
-        color: "#6B7280",
         total: 180000,
-        category: "Khác",
+        categoryId: "6",
         note: "Cây để bàn",
-      },
-
-      // Bonus thêm 2 cho đủ 20
-      {
-        id: "19",
-        title: "Ăn tối",
-        start: "2025-09-25T20:00:00",
-        teamId: String(id),
-        color: "#3B82F6",
-        total: 90000,
-        category: "Ăn uống",
-        note: "Ăn phở bò",
       },
       {
         id: "20",
-        title: "Mua balo",
-        start: "2025-09-25T17:00:00",
+        title: "Đóng tiền điện",
+        start: "2025-09-25T09:00:00",
         teamId: String(id),
-        color: "#EF4444",
-        total: 400000,
-        category: "Shopping",
-        note: "Balo laptop",
+        total: 500000,
+        categoryId: "6",
+        note: "Hóa đơn tháng 9",
       },
     ];
     setEvents(fake);
     setFilteredEvents(fake);
   }, [id]);
 
-  // ========== Apply Filters ==========
-  useEffect(() => {
-    let filtered = [...events];
-
-    if (dateRange) {
-      const [start, end] = dateRange;
-      filtered = filtered.filter((ev) =>
-        dayjs(ev.start).isBetween(start, end, "day", "[]")
+  // ========== Save Event ==========
+  const handleSaveEvent = (newEvent: CalendarEvent) => {
+    if (editingEvent) {
+      setEvents((prev) =>
+        prev.map((e) => (e.id === newEvent.id ? newEvent : e))
       );
+      message.success("Cập nhật thành công!");
+    } else {
+      setEvents((prev) => [...prev, newEvent]);
+      message.success("Thêm chi tiêu thành công!");
     }
-
-    if (categoryFilter) {
-      filtered = filtered.filter((ev) => ev.category === categoryFilter);
-    }
-
-    setFilteredEvents(filtered);
-  }, [dateRange, categoryFilter, events]);
-
-  // ========== Handle Add Event ==========
-  const handleAddExpenseSuccess = (newExpense: CalendarEvent) => {
-    setEvents((prev) => [...prev, newExpense]);
-    message.success("Thêm chi tiêu thành công!");
+    setIsSplitModalOpen(false);
+    setEditingEvent(null);
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 font-sans text-gray-800">
-      <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
+    <ConfigProvider locale={viVN}>
+      <div className="min-h-screen flex flex-col font-sans text-gray-800 bg-white rounded-2xl shadow">
+        {/* Header */}
+        <Card
+          className="mb-4 shadow-sm"
+          bordered={false}
+          bodyStyle={{ padding: "16px 20px" }}
+        >
+          <h1 className="text-2xl font-bold text-gray-800">
+            Quản lý chi tiêu {group?.name ? `- ${group.name}` : ""}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            Theo dõi và quản lý toàn bộ chi tiêu trong nhóm
+          </p>
+        </Card>
+        <div className="flex-1 p-4">
+          <Spin spinning={loading}>
+            <div className="flex gap-4 items-start">
+              {/* Sidebar cố định */}
+              <div className="w-[320px] sticky top-4 self-start">
+                <EventGroup
+                  members={group?.members || []}
+                  events={filteredEvents}
+                  selectedDate={dayjs()}
+                  onDateChange={(date) =>
+                    message.info(`Chọn ngày: ${date.format("DD/MM/YYYY")}`)
+                  }
+                />
+              </div>
 
-      <div className="flex-1 p-4">
-        <Spin spinning={loading}>
-          <div className="flex gap-4 items-start">
-            {/* Sidebar trái */}
-            <div className="w-[320px]">
-              <EventGroup
-                members={group?.members || []}
-                events={filteredEvents}
-                selectedDate={dayjs()}
-                onDateChange={() =>
-                  message.info("Chọn ngày trong mini calendar")
-                }
-                onAddGroup={() => message.info("Tạo nhóm mới")}
-                onAddMember={() => message.info("Thêm thành viên")}
-                onEditMember={(m) => message.info(`Sửa ${m.name}`)}
-                onDeleteMember={(id) => message.info(`Xoá ${id}`)}
-              />
-            </div>
+              {/* Main content */}
+              <div className="flex-1">
+                {/* Card toolbar */}
+                <Card
+                  title="Danh sách chi tiêu"
+                  className="shadow-sm border-b-0"
+                  bodyStyle={{ padding: 0 }}
+                  extra={
+                    <Space wrap>
+                      <RangePicker
+                        defaultValue={[
+                          dayjs().startOf("month"),
+                          dayjs().endOf("month"),
+                        ]}
+                        format="DD/MM/YYYY"
+                        onChange={(dates) => {
+                          if (!dates) return setDateRange(null);
+                          const [start, end] = dates as [Dayjs, Dayjs];
+                          setDateRange([start, end]);
+                        }}
+                      />
+                      <Select
+                        placeholder="Danh mục"
+                        allowClear
+                        style={{ width: 150 }}
+                        onChange={(value) => setCategoryFilter(value || null)}
+                        options={[
+                          { value: "all", label: "Tất cả" },
+                          ...categories.map((c) => ({
+                            value: c.id,
+                            label: c.name,
+                          })),
+                        ]}
+                      />
+                      <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        className="rounded-full bg-blue-400 hover:bg-blue-500 border-none px-5 py-2 font-medium shadow text-white"
+                        onClick={() => {
+                          setEditingEvent(null);
+                          setIsSplitModalOpen(true);
+                        }}
+                      >
+                        Thêm chi tiêu
+                      </Button>
+                    </Space>
+                  }
+                />
 
-            {/* Nội dung chính */}
-            <div className="flex-1">
-              <Card
-                title="Danh sách chi tiêu"
-                className="shadow-sm"
-                extra={
-                  <Space wrap>
-                    <RangePicker
-                      defaultValue={[
-                        dayjs().startOf("month"),
-                        dayjs().endOf("month"),
-                      ]}
-                      format="DD/MM/YYYY"
-                      onChange={(dates) => {
-                        if (!dates) return setDateRange(null);
-                        const [start, end] = dates as [Dayjs, Dayjs];
-                        setDateRange([start, end]);
-                      }}
-                    />
-                    <Select
-                      placeholder="Danh mục"
-                      allowClear
-                      style={{ width: 150 }}
-                      onChange={(value) => setCategoryFilter(value || null)}
-                      options={[
-                        { value: "Ăn uống", label: "Ăn uống" },
-                        { value: "Shopping", label: "Shopping" },
-                        { value: "Cafe", label: "Cafe" },
-                        { value: "Đi lại", label: "Đi lại" },
-                        { value: "Giải trí", label: "Giải trí" },
-                        { value: "Khác", label: "Khác" },
-                      ]}
-                    />
-
-                    <Button
-                      type="primary"
-                      onClick={() => setIsSplitModalOpen(true)}
-                    >
-                      + Thêm chi tiêu
-                    </Button>
-                  </Space>
-                }
-              >
-                {Object.entries(
-                  filteredEvents
-                    .sort(
-                      (a, b) =>
-                        dayjs(a.start).valueOf() - dayjs(b.start).valueOf()
-                    )
-                    .reduce((acc, ev) => {
+                {/* Box danh sách chi tiêu */}
+                <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-4 pt-2 max-h-[100vh] overflow-y-auto">
+                  {Object.entries(
+                    filteredEvents.reduce((acc, ev) => {
                       const day = dayjs(ev.start).format("YYYY-MM-DD");
                       if (!acc[day]) acc[day] = [];
                       acc[day].push(ev);
                       return acc;
                     }, {} as Record<string, CalendarEvent[]>)
-                ).map(([day, dayEvents]) => {
-                  const totalDay = dayEvents.reduce(
-                    (sum, ev) => sum + (ev.total || 0),
-                    0
-                  );
+                  ).map(([day, dayEvents], idx, arr) => {
+                    const totalDay = dayEvents.reduce(
+                      (sum, ev) => sum + (ev.total || 0),
+                      0
+                    );
 
-                  return (
-                    <div key={day} className="mb-6">
-                      <div className="flex justify-between items-center mb-2">
-                        <h3 className="font-semibold text-base text-gray-700">
-                          {dayjs(day).format("dddd, DD/MM/YYYY")}
-                        </h3>
-                        <span className="text-sm text-gray-500">
-                          Tổng: {totalDay.toLocaleString()} VNĐ
-                        </span>
-                      </div>
-                      <List
-                        bordered
-                        dataSource={dayEvents}
-                        renderItem={(ev) => (
-                          <List.Item
-                            actions={[
-                              // Sửa sự kiện
-                              <EditOutlined
-                                key="edit"
-                                style={{
-                                  color: "#000", // mặc định đen
-                                  cursor: "pointer",
-                                  fontSize: 16,
-                                }}
-                                onClick={() => {
-                                  // mở modal sửa
-                                  setIsSplitModalOpen(true);
-                                  setEditingEvent(ev); // set sự kiện đang sửa
-                                }}
-                              />,
-
-                              // Xóa sự kiện
-                              <DeleteOutlined
-                                key="delete"
-                                style={{
-                                  color: "#000", // mặc định đen
-                                  cursor: "pointer",
-                                  fontSize: 16,
-                                }}
-                                onClick={() => {
-                                  setEvents((prev) =>
-                                    prev.filter((e) => e.id !== ev.id)
-                                  );
-                                  message.success("Đã xoá sự kiện");
-                                }}
-                              />,
-                            ]}
-                          >
-                            <div className="flex justify-between w-full">
-                              {/* Bên trái: category + note */}
-                              <div>
-                                <span className="font-medium">
-                                  {ev.category || "Chung"}
-                                </span>
-                                {ev.note && (
-                                  <span className="ml-2 text-gray-400 text-sm">
-                                    ({ev.note})
+                    return (
+                      <div key={day} className="pb-4 border-b last:border-b-0">
+                        <div className="flex justify-between items-center mb-2">
+                          <h3 className="font-semibold text-base text-gray-700">
+                            {dayjs(day).format("dddd, DD/MM/YYYY")}
+                          </h3>
+                          <span className="text-sm text-gray-500">
+                            Tổng: {totalDay.toLocaleString()} VNĐ
+                          </span>
+                        </div>
+                        <List
+                          bordered={false}
+                          dataSource={dayEvents}
+                          renderItem={(ev) => {
+                            const cat = categories.find(
+                              (c) => c.id === ev.categoryId
+                            );
+                            return (
+                              <List.Item
+                                className="px-0"
+                                actions={[
+                                  <EditOutlined
+                                    key="edit"
+                                    style={{ color: "#000" }}
+                                    onClick={() => {
+                                      setEditingEvent(ev);
+                                      setIsSplitModalOpen(true);
+                                    }}
+                                  />,
+                                  <DeleteOutlined
+                                    key="delete"
+                                    style={{ color: "#ff4d4f" }}
+                                    onClick={() => {
+                                      setEvents((prev) =>
+                                        prev.filter((e) => e.id !== ev.id)
+                                      );
+                                      message.success("Đã xoá sự kiện");
+                                    }}
+                                  />,
+                                ]}
+                              >
+                                <div className="flex justify-between w-full">
+                                  <div className="flex items-center gap-2">
+                                    <Tag
+                                      color={cat?.color || "default"}
+                                      className="min-w-[80px] text-center"
+                                    >
+                                      {cat?.name || "Chung"}
+                                    </Tag>
+                                    {ev.note && (
+                                      <span className="text-gray-500 text-sm">
+                                        | {ev.note}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-gray-600 font-medium min-w-[100px] text-right">
+                                    {ev.total?.toLocaleString()} VNĐ
                                   </span>
-                                )}
-                              </div>
-
-                              {/* Bên phải: số tiền */}
-                              <span className="text-gray-600">
-                                {ev.total?.toLocaleString() || 0} VNĐ
-                              </span>
-                            </div>
-                          </List.Item>
-                        )}
-                      />
-                    </div>
-                  );
-                })}
-              </Card>
+                                </div>
+                              </List.Item>
+                            );
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </div>
-        </Spin>
+          </Spin>
+        </div>
+
+        {/* Auth Modal */}
+        <AuthModal
+          isOpen={isAuthOpen}
+          onClose={() => setIsAuthOpen(false)}
+          onLoginSuccess={(u: User) => setUser(u)}
+        />
+
+        {/* Expense Modal */}
+        <ExpenseModal
+          open={isSplitModalOpen}
+          event={editingEvent}
+          categories={categories}
+          onClose={() => {
+            setIsSplitModalOpen(false);
+            setEditingEvent(null);
+          }}
+          onSave={handleSaveEvent}
+        />
       </div>
-
-      {/* Modal đăng nhập */}
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        onLoginSuccess={(u: User) => setUser(u)}
-      />
-
-      {/* Modal thêm chi tiêu */}
-    </div>
+    </ConfigProvider>
   );
 }

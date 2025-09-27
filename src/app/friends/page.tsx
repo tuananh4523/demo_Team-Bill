@@ -175,7 +175,7 @@ export default function FriendsPage() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
       {/* ✅ Topbar cố định */}
-      <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} />
+      {/* <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} /> */}
 
       <main className="p-6">
         <Card

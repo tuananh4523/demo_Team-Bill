@@ -26,28 +26,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi">
+    <html lang="vi" className="h-full">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-100`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased h-full overflow-hidden`}
       >
         <Providers>
-          <div className="flex h-screen">
+          <div className="flex h-full bg-[var(--beige-bg)]">
             {/* Sidebar trái */}
             <aside className="w-64 bg-white border-r border-gray-200 shadow-sm">
               <Sidebar />
             </aside>
 
             {/* Phần chính */}
-            <div className="flex flex-col flex-1">
+            <div className="flex flex-col flex-1 h-full">
               {/* Topbar */}
               <header className="px-6 py-3 bg-white border-b border-gray-200 sticky top-0 z-10">
                 <Topbar />
               </header>
 
-              {/* Nội dung chính */}
-              <main className="flex-1 overflow-y-auto p-6">
-                {children}
-              </main>
+              {/* Nội dung chính cuộn riêng */}
+              <main className="flex-1 overflow-y-auto p-6">{children}</main>
             </div>
           </div>
         </Providers>

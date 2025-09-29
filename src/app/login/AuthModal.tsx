@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import axios from "axios";
+import { Avatar } from "antd"; // ✅ import Avatar của Ant Design
+import { UserOutlined } from "@ant-design/icons"; // ✅ icon mặc định
 
 export type User = {
   username: string;
@@ -16,7 +18,11 @@ type AuthModalProps = {
   onLoginSuccess: (user: User) => void;
 };
 
-export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModalProps) {
+export default function AuthModal({
+  isOpen,
+  onClose,
+  onLoginSuccess,
+}: AuthModalProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -26,46 +32,52 @@ export default function AuthModal({ isOpen, onClose, onLoginSuccess }: AuthModal
 
   if (!isOpen) return null;
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    const url = isLogin
-      ? "http://localhost:8080/api/user/signin"
-      : "http://localhost:8080/api/user/signup";
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const url = isLogin
+        ? "http://localhost:8080/api/user/signin"
+        : "http://localhost:8080/api/user/signup";
 
-    const payload = isLogin
-      ? { username, password }
-      : { username, password, email, age };
+      const payload = isLogin
+        ? { username, password }
+        : { username, password, email, age };
 
-    const res = await axios.post<User>(url, payload);
+      const res = await axios.post<User>(url, payload);
 
-    if (isLogin) {
-      setMessage(`Đăng nhập thành công! Xin chào ${res.data.username || username}`);
-      if (res.data.token) localStorage.setItem("token", res.data.token);
-      onLoginSuccess(res.data);
-      onClose();
-    } else {
-      setMessage("Đăng ký thành công! Hãy đăng nhập");
-      const agree = window.confirm("Đăng ký thành công! Bạn có muốn chuyển sang đăng nhập không?");
-      if (agree) {
-        setIsLogin(true);
-        setMessage("");
+      if (isLogin) {
+        setMessage(
+          `Đăng nhập thành công! Xin chào ${res.data.username || username}`
+        );
+        if (res.data.token) localStorage.setItem("token", res.data.token);
+        onLoginSuccess(res.data);
+        onClose();
+      } else {
+        setMessage("Đăng ký thành công! Hãy đăng nhập");
+        const agree = window.confirm(
+          "Đăng ký thành công! Bạn có muốn chuyển sang đăng nhập không?"
+        );
+        if (agree) {
+          setIsLogin(true);
+          setMessage("");
+        }
+      }
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        setMessage(
+          error.response?.data?.message ||
+            error.response?.data?.error ||
+            "Có lỗi xảy ra"
+        );
+      } else {
+        setMessage("Lỗi không xác định");
       }
     }
-  } catch (error: unknown) {
-    if (axios.isAxiosError(error)) {
-      setMessage(error.response?.data?.message || error.response?.data?.error || "Có lỗi xảy ra");
-    } else {
-      setMessage("Lỗi không xác định");
-    }
-  }
-};
-
+  };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-50">
       <div className="relative w-full max-w-md p-8 rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 shadow-2xl border border-white/10">
-        
         {/* Nút đóng */}
         <button
           onClick={onClose}
@@ -73,6 +85,15 @@ const handleSubmit = async (e: React.FormEvent) => {
         >
           ✕
         </button>
+
+        {/* Avatar */}
+        <div className="flex justify-center mb-4">
+          <Avatar
+            size={64}
+            icon={<UserOutlined />}
+            style={{ backgroundColor: "#1890ff" }}
+          />
+        </div>
 
         {/* Tiêu đề */}
         <h2 className="text-3xl font-bold text-center mb-6 bg-gradient-to-r from-pink-400 to-yellow-400 bg-clip-text text-transparent">
@@ -143,7 +164,9 @@ const handleSubmit = async (e: React.FormEvent) => {
             }}
             className="text-sm text-gray-300 hover:text-pink-400 transition"
           >
-            {isLogin ? "Chưa có tài khoản? Đăng ký ngay" : "Đã có tài khoản? Đăng nhập"}
+            {isLogin
+              ? "Chưa có tài khoản? Đăng ký ngay"
+              : "Đã có tài khoản? Đăng nhập"}
           </button>
         </div>
       </div>

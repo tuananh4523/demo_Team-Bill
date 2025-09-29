@@ -22,6 +22,8 @@ import {
   DeleteOutlined,
   CheckOutlined,
   DownOutlined,
+  UnorderedListOutlined,
+  AppstoreOutlined
 } from "@ant-design/icons";
 
 import AuthModal, { User } from "@/app/login/AuthModal";
@@ -156,106 +158,112 @@ export default function CategoriesPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
+    <div className="min-h-screenfont-sans text-gray-800">
       <main className="p-6">
         {/* Tiêu đề */}
-        <h1 className="text-2xl font-bold mb-1">Quản lý danh mục</h1>
+        <h1 className="text-2xl font-bold text-gray-800 mb-1">Quản lý danh mục</h1>
         <p className="text-gray-500 mb-6">Xem và quản lý các danh mục của bạn</p>
 
         {/* Header action bar */}
         <div className="flex justify-between items-center mb-6">
           {/* Nút thêm bên trái */}
-          <button
-            className="rounded-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium shadow"
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            shape="round"
             onClick={() => openModal()}
           >
-            <PlusOutlined className="mr-1" /> Thêm danh mục
-          </button>
+           Thêm danh mục
+          </Button>
 
           {/* Toggle + Sort bên phải */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Toggle view */}
-            <div className="flex border rounded-full overflow-hidden bg-white">
+            <div className="flex border border-gray-300 rounded-md overflow-hidden">
               <button
-                className={`flex items-center justify-center w-12 h-10 text-lg ${
-                  viewMode === "grid"
-                    ? "bg-blue-50 text-blue-600 font-semibold"
-                    : "text-gray-600"
-                }`}
-                onClick={() => setViewMode("grid")}
-              >
-                <CheckOutlined
-                  className={`mr-1 text-xs transition ${
-                    viewMode !== "grid" ? "opacity-0" : "opacity-100"
-                  }`}
-                />
-                ▦
-              </button>
-              <button
-                className={`flex items-center justify-center w-12 h-10 text-lg ${
-                  viewMode === "list"
-                    ? "bg-blue-50 text-blue-600 font-semibold"
-                    : "text-gray-600"
-                }`}
-                onClick={() => setViewMode("list")}
-              >
-                <CheckOutlined
-                  className={`mr-1 text-xs transition ${
-                    viewMode !== "list" ? "opacity-0" : "opacity-100"
-                  }`}
-                />
-                ≡
-              </button>
+              className={`flex items-center gap-1 px-3 py-1.5 text-sm ${
+                viewMode === "grid"
+                  ? "bg-blue-50 text-blue-600 font-medium"
+                  : "bg-white text-gray-600"
+              }`}
+              onClick={() => setViewMode("grid")}
+            >
+              <CheckOutlined className={`text-xs ${viewMode !== "grid" ? "opacity-0" : ""}`} />
+              <AppstoreOutlined />
+            </button>
+            <button
+              className={`flex items-center gap-1 px-3 py-1.5 text-sm ${
+                viewMode === "list"
+                  ? "bg-blue-50 text-blue-600 font-medium"
+                  : "bg-white text-gray-600"
+              }`}
+              onClick={() => setViewMode("list")}
+            >
+              <CheckOutlined className={`text-xs ${viewMode !== "list" ? "opacity-0" : ""}`} />
+              <UnorderedListOutlined />
+            </button>
             </div>
 
             {/* Sort dropdown */}
             <Dropdown
               menu={{ items: sortMenu, onClick: (info) => setSortKey(info.key) }}
             >
-              <button className="h-10 px-4 rounded-full bg-white border hover:bg-gray-50 flex items-center gap-1 text-sm">
+              <Button shape="round">
                 {sortMenu.find((i) => i.key === sortKey)?.label} <DownOutlined />
-              </button>
+              </Button>
             </Dropdown>
           </div>
         </div>
 
         {/* Nội dung */}
-        {viewMode === "grid" ? (
-          <Row gutter={[16, 16]}>
-            {sortedCategories.map((cat) => (
-              <Col key={cat.id} xs={24} sm={12} md={8} lg={6}>
-                <Card
-                  style={{ borderTop: `4px solid ${cat.color}`, height: "100%" }}
-                  className="shadow-sm flex flex-col justify-between"
-                >
-                  <div>
-                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                      <span
-                        style={{
-                          display: "inline-block",
-                          width: 12,
-                          height: 12,
-                          borderRadius: "50%",
-                          backgroundColor: cat.color,
-                        }}
-                      />
-                      {cat.name}
-                    </h3>
-                    <p className="text-gray-500 mt-2 text-sm">
-                      {cat.description || "Không có mô tả"}
-                    </p>
-                  </div>
-                  <div className="mt-4 flex justify-end gap-2">
-                    <Button icon={<EditOutlined />} onClick={() => openModal(cat)} />
-                    <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(cat.id)} />
-                  </div>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        ) : (
-          <Table bordered dataSource={sortedCategories} columns={columns} rowKey="id" pagination={false} />
-        )}
+        {/* Nội dung grid */}
+{viewMode === "grid" ? (
+  <Row gutter={[16, 16]}>
+    {sortedCategories.map((cat) => (
+      <Col key={cat.id} xs={24} sm={12} md={8} lg={6}>
+        <Card
+          style={{ borderTop: `4px solid ${cat.color}`, height: "100%" }}
+          className="shadow-sm flex flex-col justify-between"
+        >
+          <div>
+            {/* Dùng Tag giống list */}
+            <Tag
+              color={cat.color}
+              style={{ 
+                fontWeight: 500,
+                padding: "6px 12px",
+                fontSize: "14px",
+                borderRadius: 6
+              }}
+            >
+              {cat.name}
+            </Tag>
+
+            {/* Mô tả */}
+            <p className="text-gray-500 mt-3 text-sm">
+              {cat.description || "Không có mô tả"}
+            </p>
+          </div>
+
+          {/* Action */}
+          <div className="mt-4 flex justify-end gap-2">
+            <Button icon={<EditOutlined />} onClick={() => openModal(cat)} />
+            <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(cat.id)} />
+          </div>
+        </Card>
+      </Col>
+    ))}
+  </Row>
+) : (
+  <Table
+    bordered
+    dataSource={sortedCategories}
+    columns={columns}
+    rowKey="id"
+    pagination={false}
+  />
+)}
+
       </main>
 
       {/* Modal thêm/sửa */}

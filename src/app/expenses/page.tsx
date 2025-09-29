@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import {
   Button,
-  Card,
   Input,
   Select,
   Table,
@@ -13,10 +12,9 @@ import {
   Modal,
   Form,
   message,
+  Card,
 } from "antd";
 import dayjs from "dayjs";
-import Breadcrumb from "@/components/Breadcrumb";
-import Topbar from "@/components/Topbar";
 import AuthModal, { User } from "@/app/login/AuthModal";
 
 type Expense = {
@@ -60,7 +58,7 @@ export default function TeamBillPage() {
       const res = await axios.get(API_URL);
       setExpenses(res.data);
     } catch {
-      message.error(" Lỗi khi load expenses");
+      message.error("Lỗi khi load expenses");
     }
   };
 
@@ -69,7 +67,7 @@ export default function TeamBillPage() {
       const res = await axios.get(`${API_URL}/summary`);
       setSummary(res.data);
     } catch {
-      message.error(" Lỗi khi load summary");
+      message.error("Lỗi khi load summary");
     }
   };
 
@@ -95,7 +93,7 @@ export default function TeamBillPage() {
       form.resetFields();
       fetchSummary();
     } catch {
-      message.error(" Lỗi khi lưu");
+      message.error("Lỗi khi lưu");
     }
   };
 
@@ -103,10 +101,10 @@ export default function TeamBillPage() {
     try {
       await axios.delete(`${API_URL}/${id}`);
       setExpenses((prev) => prev.filter((e) => e._id !== id));
-      message.success(" Xóa thành công");
+      message.success("Xóa thành công");
       fetchSummary();
     } catch {
-      message.error(" Lỗi khi xóa");
+      message.error("Lỗi khi xóa");
     }
   };
 
@@ -169,119 +167,114 @@ export default function TeamBillPage() {
 
   // ================= Render =================
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
-      {/* Topbar giống dashboard */}
-      {/* <Topbar user={user} onAvatarClick={() => setIsAuthOpen(true)} /> */}
-
+    <div className="min-h-screen font-sans text-gray-800">
       <main className="p-6">
-        {/* Header page */}
-        <Card variant="bordered"className="shadow-sm">
-           <div className="flex justify-between items-center mb-4"> 
-            <h1 className="text-xl font-bold">Quản lý chi tiêu</h1>
-            </div>
-            <div className="flex items-center justify-between mb-6">
-              {/* <Button
-                type="primary"
-                onClick={() => {
-                  setEditExpense(null);
-                  setIsFormOpen(true);
-                  form.resetFields();
-                  form.setFieldsValue({
-                    status: "CHỜ",
-                    date: dayjs().format("YYYY-MM-DD"),
-                  });
-                }}
-              >
-                + Thêm chi tiêu
-              </Button> */}
-            </div>
+        {/* Tiêu đề trang */}
+        <h1 className="text-2xl font-bold mb-1">Quản lý chi tiêu</h1>
+        <p className="text-gray-500 mb-6">Xem và quản lý các khoản chi của bạn</p>
 
-            {/* Filter */}
-            <div className="flex items-center mb-6 gap-4">
-              <Select
-                value={filterStatus}
-                onChange={(val) => setFilterStatus(val)}
-                style={{ width: 160 }}
-              >
-                <Select.Option value="ALL">Tất cả</Select.Option>
+        {/* Toolbar (nút + filter) */}
+        <div className="flex items-center justify-between mb-6">
+          <Button
+            type="primary"
+            onClick={() => {
+              setEditExpense(null);
+              setIsFormOpen(true);
+              form.resetFields();
+              form.setFieldsValue({
+                status: "CHỜ",
+                date: dayjs().format("YYYY-MM-DD"),
+              });
+            }}
+          >
+            + Thêm chi tiêu
+          </Button>
+
+          <div className="flex items-center gap-4">
+            <Select
+              value={filterStatus}
+              onChange={(val) => setFilterStatus(val)}
+              style={{ width: 160 }}
+            >
+              <Select.Option value="ALL">Tất cả</Select.Option>
+              <Select.Option value="CHỜ">CHỜ</Select.Option>
+              <Select.Option value="HOÀN TẤT">HOÀN TẤT</Select.Option>
+            </Select>
+            <span className="font-semibold">
+              Tổng:{" "}
+              {new Intl.NumberFormat("vi-VN").format(summary.totalAmount)} VNĐ |{" "}
+              {summary.count} giao dịch
+            </span>
+          </div>
+        </div>
+
+        {/* Bảng chi tiêu */}
+        <Card className="shadow-sm">
+          <Table
+            rowKey="_id"
+            dataSource={filteredExpenses}
+            columns={columns}
+            pagination={false}
+            scroll={{ x: "100%", y: 500 }}
+          />
+        </Card>
+
+        {/* Modal thêm/sửa chi tiêu */}
+        <Modal
+          title={editExpense ? "Sửa chi tiêu" : "Thêm chi tiêu"}
+          open={isFormOpen}
+          onCancel={() => setIsFormOpen(false)}
+          onOk={handleSave}
+          okText="Lưu"
+          cancelText="Hủy"
+          width="100%"
+          style={{ maxWidth: "700px" }}
+          bodyStyle={{ padding: "24px" }}
+          centered
+        >
+          <Form layout="vertical" form={form} className="w-full">
+            <Form.Item
+              name="title"
+              label="Tiêu đề"
+              rules={[{ required: true, message: "Nhập tiêu đề" }]}
+            >
+              <Input className="w-full" />
+            </Form.Item>
+            <Form.Item
+              name="amount"
+              label="Số tiền"
+              rules={[{ required: true, message: "Nhập số tiền" }]}
+            >
+              <Input
+                type="number"
+                placeholder="Nhập số tiền (VD: 500000)"
+                className="w-full"
+              />
+            </Form.Item>
+            <Form.Item name="category" label="Loại">
+              <Input className="w-full" />
+            </Form.Item>
+            <Form.Item name="person" label="Người chịu">
+              <Input className="w-full" />
+            </Form.Item>
+            <Form.Item name="status" label="Trạng thái">
+              <Select className="w-full">
                 <Select.Option value="CHỜ">CHỜ</Select.Option>
                 <Select.Option value="HOÀN TẤT">HOÀN TẤT</Select.Option>
               </Select>
-              <span className="ml-auto font-semibold">
-                Tổng:{" "}
-                {new Intl.NumberFormat("vi-VN").format(summary.totalAmount)} VNĐ |{" "}
-                {summary.count} giao dịch
-              </span>
-            </div>
+            </Form.Item>
+            <Form.Item name="date" label="Ngày">
+              <Input type="date" className="w-full" />
+            </Form.Item>
+          </Form>
+        </Modal>
 
-            {/* Table */}
-            <Card>
-              <Table
-                rowKey="_id"
-                dataSource={filteredExpenses}
-                columns={columns}
-                pagination={false}
-                scroll={{ x: "100%", y: 500 }}
-              />
-            </Card>
-
-            {/* Modal thêm/sửa chi tiêu */}
-            <Modal
-              title={editExpense ? "Sửa chi tiêu" : "Thêm chi tiêu"}
-              open={isFormOpen}
-              onCancel={() => setIsFormOpen(false)}
-              onOk={handleSave}
-              okText="Lưu"
-              cancelText="Hủy"
-              width="100%"
-              style={{ maxWidth: "700px" }} // modal rộng vừa, giống dashboard
-              bodyStyle={{ padding: "24px" }}
-              centered
-            >
-              <Form layout="vertical" form={form} className="w-full">
-                <Form.Item
-                  name="title"
-                  label="Tiêu đề"
-                  rules={[{ required: true, message: "Nhập tiêu đề" }]}
-                >
-                  <Input className="w-full" />
-                </Form.Item>
-                <Form.Item
-                  name="amount"
-                  label="Số tiền"
-                  rules={[{ required: true, message: "Nhập số tiền" }]}
-                >
-                  <Input
-                    type="number"
-                    placeholder="Nhập số tiền (VD: 500000)"
-                    className="w-full"
-                  />
-                </Form.Item>
-                <Form.Item name="category" label="Loại">
-                  <Input className="w-full" />
-                </Form.Item>
-                <Form.Item name="person" label="Người chịu">
-                  <Input className="w-full" />
-                </Form.Item>
-                <Form.Item name="status" label="Trạng thái">
-                  <Select className="w-full">
-                    <Select.Option value="CHỜ">CHỜ</Select.Option>
-                    <Select.Option value="HOÀN TẤT">HOÀN TẤT</Select.Option>
-                  </Select>
-                </Form.Item>
-                <Form.Item name="date" label="Ngày">
-                  <Input type="date" className="w-full" />
-                </Form.Item>
-              </Form>
-            </Modal>
-
-            {/* Auth Modal */}
-            <AuthModal
-              isOpen={isAuthOpen}
-              onClose={() => setIsAuthOpen(false)}
-              onLoginSuccess={(u) => setUser(u)}
-            />
-        </Card>
+        {/* Auth Modal */}
+        <AuthModal
+          isOpen={isAuthOpen}
+          onClose={() => setIsAuthOpen(false)}
+          onLoginSuccess={(u) => setUser(u)}
+        />
       </main>
     </div>
   );

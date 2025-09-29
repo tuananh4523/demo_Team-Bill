@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import axios from "axios";
 import {
-  Card,
   Spin,
   message,
   List,
@@ -216,7 +215,7 @@ export default function SplitPage() {
     if (id) fetchGroup();
   }, [id]);
 
-  // ========== Fake Events (20 sự kiện mẫu) ==========
+  // ========== Fake Events (20 sự kiện cũ) ==========
   useEffect(() => {
     if (!id) return;
     const fake: CalendarEvent[] = [
@@ -422,170 +421,170 @@ export default function SplitPage() {
 
   return (
     <ConfigProvider locale={viVN}>
-      <div className="min-h-screen flex flex-col font-sans text-gray-800 bg-white rounded-2xl shadow">
+      <div className="min-h-screen font-sans text-gray-800 p-6">
         {/* Header */}
-        <Card
-          className="mb-4 shadow-sm"
-          bordered={false}
-          bodyStyle={{ padding: "16px 20px" }}
-        >
-          <h1 className="text-2xl font-bold text-gray-800">
-            Quản lý chi tiêu {group?.name ? `- ${group.name}` : ""}
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Theo dõi và quản lý toàn bộ chi tiêu trong nhóm
-          </p>
-        </Card>
-        <div className="flex-1 p-4">
-          <Spin spinning={loading}>
-            <div className="flex gap-4 items-start">
-              {/* Sidebar cố định */}
-              <div className="w-[320px] sticky top-4 self-start">
-                <EventGroup
-                  members={group?.members || []}
-                  events={filteredEvents}
-                  selectedDate={dayjs()}
-                  onDateChange={(date) =>
-                    message.info(`Chọn ngày: ${date.format("DD/MM/YYYY")}`)
-                  }
-                />
+        <h1 className="text-2xl font-bold text-gray-800 mb-1">
+          Quản lý chi tiêu {group?.name ? `- ${group.name}` : ""}
+        </h1>
+        <p className="text-gray-500 mb-6">
+          Theo dõi và quản lý toàn bộ chi tiêu trong nhóm
+        </p>
+
+        <Spin spinning={loading}>
+          <div className="flex gap-6 items-start">
+            {/* Sidebar */}
+            <div className="w-[320px] sticky top-4 self-start">
+              <EventGroup
+                members={group?.members || []}
+                events={filteredEvents.map((ev) => ({
+                  ...ev,
+                  color:
+                    categories.find((c) => c.id === ev.categoryId)?.color ||
+                    "blue", // chỉ thêm khi render
+                }))}
+                selectedDate={dayjs()}
+                onDateChange={(date) =>
+                  message.info(`Chọn ngày: ${date.format("DD/MM/YYYY")}`)
+                }
+              />
+            </div>
+
+            {/* Main content */}
+            <div className="flex-1">
+              {/* Toolbar */}
+              <div className="bg-white rounded-lg shadow-sm p-4 mb-6 flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-gray-700">
+                  Danh sách chi tiêu
+                </h2>
+                <Space wrap>
+                  <RangePicker
+                    defaultValue={[
+                      dayjs().startOf("month"),
+                      dayjs().endOf("month"),
+                    ]}
+                    format="DD/MM/YYYY"
+                    onChange={(dates) => {
+                      if (!dates) return setDateRange(null);
+                      const [start, end] = dates as [Dayjs, Dayjs];
+                      setDateRange([start, end]);
+                    }}
+                  />
+                  <Select
+                    placeholder="Danh mục"
+                    allowClear
+                    style={{ width: 150 }}
+                    onChange={(value) => setCategoryFilter(value || null)}
+                    options={[
+                      { value: "all", label: "Tất cả" },
+                      ...categories.map((c) => ({
+                        value: c.id,
+                        label: c.name,
+                      })),
+                    ]}
+                  />
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    className="rounded-full bg-blue-400 hover:bg-blue-500 border-none px-5 py-2 font-medium shadow text-white"
+                    onClick={() => {
+                      setEditingEvent(null);
+                      setIsSplitModalOpen(true);
+                    }}
+                  >
+                    Thêm chi tiêu
+                  </Button>
+                </Space>
               </div>
 
-              {/* Main content */}
-              <div className="flex-1">
-                {/* Card toolbar */}
-                <Card
-                  title="Danh sách chi tiêu"
-                  className="shadow-sm border-b-0"
-                  bodyStyle={{ padding: 0 }}
-                  extra={
-                    <Space wrap>
-                      <RangePicker
-                        defaultValue={[
-                          dayjs().startOf("month"),
-                          dayjs().endOf("month"),
-                        ]}
-                        format="DD/MM/YYYY"
-                        onChange={(dates) => {
-                          if (!dates) return setDateRange(null);
-                          const [start, end] = dates as [Dayjs, Dayjs];
-                          setDateRange([start, end]);
-                        }}
-                      />
-                      <Select
-                        placeholder="Danh mục"
-                        allowClear
-                        style={{ width: 150 }}
-                        onChange={(value) => setCategoryFilter(value || null)}
-                        options={[
-                          { value: "all", label: "Tất cả" },
-                          ...categories.map((c) => ({
-                            value: c.id,
-                            label: c.name,
-                          })),
-                        ]}
-                      />
-                      <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        className="rounded-full bg-blue-400 hover:bg-blue-500 border-none px-5 py-2 font-medium shadow text-white"
-                        onClick={() => {
-                          setEditingEvent(null);
-                          setIsSplitModalOpen(true);
-                        }}
-                      >
-                        Thêm chi tiêu
-                      </Button>
-                    </Space>
-                  }
-                />
+              {/* Danh sách chi tiêu */}
+              <div className="space-y-4 max-h-[100vh] overflow-y-auto shadow-lg">
+                {Object.entries(
+                  filteredEvents.reduce((acc, ev) => {
+                    const day = dayjs(ev.start).format("YYYY-MM-DD");
+                    if (!acc[day]) acc[day] = [];
+                    acc[day].push(ev);
+                    return acc;
+                  }, {} as Record<string, CalendarEvent[]>)
+                ).map(([day, dayEvents]) => {
+                  const totalDay = dayEvents.reduce(
+                    (sum, ev) => sum + (ev.total || 0),
+                    0
+                  );
 
-                {/* Box danh sách chi tiêu */}
-                <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-4 pt-2 max-h-[100vh] overflow-y-auto">
-                  {Object.entries(
-                    filteredEvents.reduce((acc, ev) => {
-                      const day = dayjs(ev.start).format("YYYY-MM-DD");
-                      if (!acc[day]) acc[day] = [];
-                      acc[day].push(ev);
-                      return acc;
-                    }, {} as Record<string, CalendarEvent[]>)
-                  ).map(([day, dayEvents], idx, arr) => {
-                    const totalDay = dayEvents.reduce(
-                      (sum, ev) => sum + (ev.total || 0),
-                      0
-                    );
-
-                    return (
-                      <div key={day} className="pb-4 border-b last:border-b-0">
-                        <div className="flex justify-between items-center mb-2">
-                          <h3 className="font-semibold text-base text-gray-700">
-                            {dayjs(day).format("dddd, DD/MM/YYYY")}
-                          </h3>
-                          <span className="text-sm text-gray-500">
-                            Tổng: {totalDay.toLocaleString()} VNĐ
-                          </span>
-                        </div>
-                        <List
-                          bordered={false}
-                          dataSource={dayEvents}
-                          renderItem={(ev) => {
-                            const cat = categories.find(
-                              (c) => c.id === ev.categoryId
-                            );
-                            return (
-                              <List.Item
-                                className="px-0"
-                                actions={[
-                                  <EditOutlined
-                                    key="edit"
-                                    style={{ color: "#000" }}
-                                    onClick={() => {
-                                      setEditingEvent(ev);
-                                      setIsSplitModalOpen(true);
-                                    }}
-                                  />,
-                                  <DeleteOutlined
-                                    key="delete"
-                                    style={{ color: "#ff4d4f" }}
-                                    onClick={() => {
-                                      setEvents((prev) =>
-                                        prev.filter((e) => e.id !== ev.id)
-                                      );
-                                      message.success("Đã xoá sự kiện");
-                                    }}
-                                  />,
-                                ]}
-                              >
-                                <div className="flex justify-between w-full">
-                                  <div className="flex items-center gap-2">
-                                    <Tag
-                                      color={cat?.color || "default"}
-                                      className="min-w-[80px] text-center"
-                                    >
-                                      {cat?.name || "Chung"}
-                                    </Tag>
-                                    {ev.note && (
-                                      <span className="text-gray-500 text-sm">
-                                        | {ev.note}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-gray-600 font-medium min-w-[100px] text-right">
-                                    {ev.total?.toLocaleString()} VNĐ
-                                  </span>
-                                </div>
-                              </List.Item>
-                            );
-                          }}
-                        />
+                  return (
+                    <div
+                      key={day}
+                      className="bg-white rounded-lg shadow-sm p-4"
+                    >
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-semibold text-base text-gray-700">
+                          {dayjs(day).format("dddd, DD/MM/YYYY")}
+                        </h3>
+                        <span className="text-sm text-gray-500">
+                          Tổng: {totalDay.toLocaleString()} VNĐ
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
+
+                      <List
+                        bordered={false}
+                        dataSource={dayEvents}
+                        renderItem={(ev) => {
+                          const cat = categories.find(
+                            (c) => c.id === ev.categoryId
+                          );
+                          return (
+                            <List.Item
+                              className="px-0"
+                              actions={[
+                                <EditOutlined
+                                  key="edit"
+                                  style={{ color: "#000" }}
+                                  onClick={() => {
+                                    setEditingEvent(ev);
+                                    setIsSplitModalOpen(true);
+                                  }}
+                                />,
+                                <DeleteOutlined
+                                  key="delete"
+                                  style={{ color: "#ff4d4f" }}
+                                  onClick={() => {
+                                    setEvents((prev) =>
+                                      prev.filter((e) => e.id !== ev.id)
+                                    );
+                                    message.success("Đã xoá sự kiện");
+                                  }}
+                                />,
+                              ]}
+                            >
+                              <div className="flex justify-between w-full">
+                                <div className="flex items-center gap-2">
+                                  <Tag
+                                    color={cat?.color || "default"}
+                                    className="min-w-[80px] text-center"
+                                  >
+                                    {cat?.name || "Chung"}
+                                  </Tag>
+                                  {ev.note && (
+                                    <span className="text-gray-500 text-sm">
+                                      | {ev.note}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-gray-600 font-medium min-w-[100px] text-right">
+                                  {ev.total?.toLocaleString()} VNĐ
+                                </span>
+                              </div>
+                            </List.Item>
+                          );
+                        }}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </Spin>
-        </div>
+          </div>
+        </Spin>
 
         {/* Auth Modal */}
         <AuthModal

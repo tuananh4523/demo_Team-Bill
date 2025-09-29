@@ -242,8 +242,8 @@ export default function TeamMembersPage() {
 
   // ================= Render =================
   return (
-    <div className="min-h-screen font-sans bg-gray-50 text-gray-800 p-6">
-      <h1 className="text-2xl font-bold text-gray-800 mb-2">Quản lý nhóm</h1>
+    <div className="min-h-screen font-sans text-gray-800 p-6">
+      <h1 className="text-2xl font-bold text-gray-800 mb-1">Quản lý nhóm</h1>
       <p className="text-gray-500 mb-6">Xem và quản lý các nhóm của bạn</p>
 
       {/* Toolbar */}
